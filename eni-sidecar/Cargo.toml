@@ -1,0 +1,25 @@
+[package]
+name = "eni-sidecar"
+version = "0.1.0"
+edition = "2021"
+description = "ENI World Builder - Rust sidecar with agent loop, tools, WebSocket, and SQLite"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tokio-tungstenite = "0.24"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+tantivy = "0.22"
+tiktoken-rs = "0.6"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+async-trait = "0.1"
+futures = "0.3"
+eventsource-stream = "0.2"

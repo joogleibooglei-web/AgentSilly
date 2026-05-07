@@ -1,0 +1,22 @@
+# Kiro IDE config
+.kiro/
+
+# Mockups (local design reference only)
+mockups/
+
+# Reference repos (cloned for development reference only)
+reference-repos/
+
+# Rust build artifacts
+eni-sidecar/target/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+
+# Environment
+.env
+.env.local
