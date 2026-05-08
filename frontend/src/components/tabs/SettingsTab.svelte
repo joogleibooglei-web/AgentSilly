@@ -20,7 +20,6 @@
   }
 
   let referenceDocuments: ReferenceDoc[] = $state([]);
-  let configLoaded = $state(false);
 
   // Subscribe to config store
   const unsubConfig = config.subscribe(($config: ConfigStore) => {
@@ -37,7 +36,6 @@
     }
 
     postCardPrompt = $config.postCardPrompt;
-    configLoaded = true;
   });
 
   // Subscribe to connection store
@@ -117,7 +115,6 @@
   });
 </script>
 
-{#if configLoaded}
   <div class="settings-tab">
     <!-- Sidecar Connection Status -->
     <div class="section">
@@ -237,13 +234,6 @@
       </label>
     </div>
   </div>
-{:else}
-  <div class="tab-placeholder">
-    <span class="placeholder-icon">⚙️</span>
-    <span class="placeholder-text">Settings</span>
-    <span class="placeholder-hint">Waiting for configuration to load...</span>
-  </div>
-{/if}
 
 <style>
   .settings-tab {
@@ -443,31 +433,5 @@
     display: none;
   }
 
-  .tab-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 8px;
-    color: var(--text-muted, #6b6b8a);
-  }
 
-  .placeholder-icon {
-    font-size: 32px;
-    opacity: 0.6;
-  }
-
-  .placeholder-text {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text, #e0e0e0);
-  }
-
-  .placeholder-hint {
-    font-size: 11px;
-    color: var(--text-muted, #6b6b8a);
-    text-align: center;
-    max-width: 200px;
-  }
 </style>
