@@ -33,18 +33,18 @@
 
 <style>
   .model-selector {
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 4px;
-    color: var(--text-secondary, #a0a0a0);
+    color: var(--text-secondary);
     font-size: 10px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     padding: 3px 8px;
     cursor: pointer;
     outline: none;
   }
 
   .model-selector:hover {
-    border-color: var(--accent, #7c5cfc);
+    border-color: var(--accent);
   }
 </style>

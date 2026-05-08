@@ -74,8 +74,8 @@
     text-align: center;
     padding: 24px 20px;
     margin: 16px 8px;
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 8px;
     animation: fadeIn 300ms ease;
   }
@@ -88,14 +88,14 @@
   .setup-title {
     font-size: 14px;
     font-weight: 600;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     margin: 0 0 10px 0;
   }
 
   .setup-text {
     font-size: 12px;
     line-height: 1.5;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     margin: 0 0 14px 0;
     max-width: 320px;
   }
@@ -105,15 +105,15 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 4px;
     margin-bottom: 16px;
   }
 
   .platform-label {
     font-size: 10px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
@@ -121,8 +121,8 @@
   .platform-value {
     font-size: 11px;
     font-weight: 500;
-    color: var(--accent, #7c5cfc);
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    color: var(--accent);
+    font-family: var(--mono);
   }
 
   .setup-steps {
@@ -135,7 +135,7 @@
   .step-heading {
     font-size: 11px;
     font-weight: 600;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     margin: 0 0 8px 0;
   }
 
@@ -144,7 +144,7 @@
     margin: 0;
     font-size: 11.5px;
     line-height: 1.6;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .steps-list li {
@@ -152,16 +152,16 @@
   }
 
   .binary-name {
-    background: var(--bg-elevated, #252542);
+    background: var(--bg-elevated);
     padding: 1px 5px;
     border-radius: 3px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     font-size: 10.5px;
-    color: var(--accent, #7c5cfc);
+    color: var(--accent);
   }
 
   .releases-link {
-    color: var(--accent, #7c5cfc);
+    color: var(--accent);
     text-decoration: none;
     font-weight: 500;
   }
@@ -172,7 +172,7 @@
 
   .setup-hint {
     font-size: 10.5px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     margin: 0;
     font-style: italic;
   }

@@ -130,8 +130,8 @@
   }
 
   .preview-card {
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 16px;
   }
@@ -142,7 +142,7 @@
     gap: 12px;
     margin-bottom: 14px;
     padding-bottom: 12px;
-    border-bottom: 1px solid var(--border, #3a3a5c);
+    border-bottom: 1px solid var(--border);
   }
 
   .preview-avatar {
@@ -155,7 +155,7 @@
     font-size: 20px;
     font-weight: 700;
     color: white;
-    background: linear-gradient(135deg, var(--accent, #7c5cfc), #ff6b9d);
+    background: linear-gradient(135deg, var(--accent), #ff6b9d);
     flex-shrink: 0;
   }
 
@@ -168,7 +168,7 @@
     font-size: 15px;
     font-weight: 600;
     margin-bottom: 4px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .tag-list {
@@ -180,16 +180,16 @@
   .tag-pill {
     font-size: 9px;
     padding: 2px 6px;
-    background: rgba(124, 92, 252, 0.1);
-    color: var(--accent, #7c5cfc);
+    background: rgba(232, 163, 61, 0.1);
+    color: var(--accent);
     border-radius: 3px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
   }
 
   .copy-btn {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text-muted, #6b6b8a);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     cursor: pointer;
     border-radius: 4px;
     padding: 5px 8px;
@@ -199,8 +199,8 @@
   }
 
   .copy-btn:hover {
-    color: var(--text, #e0e0e0);
-    background: var(--surface-hover, #2a2a4a);
+    color: var(--text);
+    background: var(--surface-hover);
   }
 
   .section {
@@ -214,7 +214,7 @@
   .section-label {
     font-size: 10px;
     font-weight: 600;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 4px;
@@ -223,13 +223,13 @@
   .section-content {
     font-size: 12px;
     line-height: 1.6;
-    color: var(--text-secondary, #a0a0a0);
+    color: var(--text-secondary);
   }
 
   .section-content.mono {
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     font-size: 11px;
-    background: var(--bg-elevated, #252542);
+    background: var(--bg-elevated);
     padding: 10px;
     border-radius: 4px;
   }
@@ -241,7 +241,7 @@
     justify-content: center;
     height: 100%;
     gap: 8px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   .placeholder-icon {
@@ -252,12 +252,12 @@
   .placeholder-text {
     font-size: 13px;
     font-weight: 500;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .placeholder-hint {
     font-size: 11px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     text-align: center;
     max-width: 200px;
   }

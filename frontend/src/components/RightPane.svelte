@@ -93,8 +93,8 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-left: 1px solid var(--border, #3a3a5c);
-    background: var(--bg-deep, #1a1a2e);
+    border-left: 1px solid var(--border);
+    background: var(--bg-deep);
     min-width: 0;
   }
 
@@ -103,8 +103,8 @@
     align-items: center;
     gap: 0;
     padding: 0 8px;
-    background: var(--bg-elevated, #252542);
-    border-bottom: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
@@ -119,7 +119,7 @@
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 10px 12px;
     font-size: 11px;
@@ -130,31 +130,31 @@
   }
 
   .tab:hover {
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .tab.active {
-    color: var(--accent, #7c5cfc);
-    border-bottom-color: var(--accent, #7c5cfc);
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
 
   .close-btn {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text-muted, #6b6b8a);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     cursor: pointer;
     border-radius: 4px;
     padding: 4px 7px;
     font-size: 11px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     transition: all 120ms;
     flex-shrink: 0;
     margin-left: 8px;
   }
 
   .close-btn:hover {
-    color: var(--text, #e0e0e0);
-    background: var(--surface-hover, #2a2a4a);
+    color: var(--text);
+    background: var(--surface-hover);
   }
 
   .tab-content {

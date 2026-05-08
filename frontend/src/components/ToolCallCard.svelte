@@ -30,12 +30,12 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 11px;
-    color: var(--text-secondary, #a0a0a0);
-    align-self: flex-start;
+    color: var(--text-secondary);
+    align-self: stretch;
     animation: fadeIn 200ms ease;
   }
 
@@ -43,7 +43,7 @@
     width: 18px;
     height: 18px;
     border-radius: 3px;
-    background: rgba(124, 92, 252, 0.15);
+    background: rgba(232, 163, 61, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -52,13 +52,13 @@
   }
 
   .tool-name {
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
-    color: var(--accent, #7c5cfc);
+    font-family: var(--mono);
+    color: var(--accent);
     flex-shrink: 0;
   }
 
   .tool-desc {
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -70,19 +70,19 @@
   }
 
   .tool-status.success {
-    color: var(--success, #4caf50);
+    color: var(--success);
   }
 
   .tool-status.error {
-    color: var(--error, #f44336);
+    color: var(--error);
   }
 
   .spinner {
     display: inline-block;
     width: 10px;
     height: 10px;
-    border: 2px solid var(--border, #3a3a5c);
-    border-top-color: var(--accent, #7c5cfc);
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }

@@ -99,8 +99,8 @@
 <style>
   .panel {
     height: calc(100% - 40px);
-    background: var(--bg-deep, #1a1a2e);
-    border-left: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-deep);
+    border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -124,7 +124,7 @@
 
   .resize-handle:hover,
   .resize-handle.active {
-    background: var(--accent, #7c5cfc);
+    background: var(--accent);
   }
 
   .header {
@@ -132,8 +132,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 16px;
-    background: var(--bg-elevated, #252542);
-    border-bottom: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
@@ -141,7 +141,7 @@
     font-weight: 600;
     font-size: 14px;
     letter-spacing: 0.02em;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .header-actions {
@@ -152,13 +152,13 @@
 
   .header-btn {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text-muted, #6b6b8a);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     cursor: pointer;
     border-radius: 4px;
     padding: 5px 8px;
     font-size: 11px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     transition: all 120ms;
     display: flex;
     align-items: center;
@@ -166,8 +166,8 @@
   }
 
   .header-btn:hover {
-    color: var(--text, #e0e0e0);
-    background: var(--surface-hover, #2a2a4a);
+    color: var(--text);
+    background: var(--surface-hover);
   }
 
   .content {
@@ -181,7 +181,7 @@
     width: 40%;
     min-width: 280px;
     flex: none;
-    border-right: 1px solid var(--border, #3a3a5c);
+    border-right: 1px solid var(--border);
   }
 
   @keyframes slideIn {

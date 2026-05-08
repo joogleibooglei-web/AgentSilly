@@ -54,8 +54,8 @@
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 9px 16px;
     display: flex;
@@ -65,7 +65,7 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     animation: fadeUp 200ms ease;
     z-index: 100;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .undo-summary {
@@ -77,8 +77,8 @@
 
   .undo-btn {
     background: transparent;
-    border: 1px solid var(--accent, #7c5cfc);
-    color: var(--accent, #7c5cfc);
+    border: 1px solid var(--accent);
+    color: var(--accent);
     border-radius: 4px;
     padding: 3px 10px;
     font-size: 11px;
@@ -89,14 +89,14 @@
   }
 
   .undo-btn:hover {
-    background: var(--accent, #7c5cfc);
+    background: var(--accent);
     color: white;
   }
 
   .undo-dismiss {
     background: none;
     border: none;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 12px;
     padding: 2px;
@@ -104,7 +104,7 @@
   }
 
   .undo-dismiss:hover {
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   @keyframes fadeUp {

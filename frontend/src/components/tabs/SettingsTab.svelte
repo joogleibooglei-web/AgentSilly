@@ -250,8 +250,8 @@
   }
 
   .section {
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 14px;
   }
@@ -259,7 +259,7 @@
   .section-label {
     font-size: 10px;
     font-weight: 600;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 10px;
@@ -280,7 +280,7 @@
 
   .status-text {
     font-size: 12px;
-    color: var(--text-secondary, #a0a0a0);
+    color: var(--text-secondary);
   }
 
   .form-group {
@@ -304,7 +304,7 @@
     display: block;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text-secondary, #a0a0a0);
+    color: var(--text-secondary);
     margin-bottom: 4px;
   }
 
@@ -312,33 +312,33 @@
     width: 100%;
     padding: 7px 10px;
     font-size: 12px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    font-family: var(--mono);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 4px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     outline: none;
     transition: border-color 120ms;
     box-sizing: border-box;
   }
 
   .form-input:focus {
-    border-color: var(--accent, #7c5cfc);
+    border-color: var(--accent);
   }
 
   .form-input::placeholder {
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   .form-textarea {
     width: 100%;
     padding: 8px 10px;
     font-size: 12px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    font-family: var(--mono);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 4px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     outline: none;
     resize: vertical;
     min-height: 80px;
@@ -347,11 +347,11 @@
   }
 
   .form-textarea:focus {
-    border-color: var(--accent, #7c5cfc);
+    border-color: var(--accent);
   }
 
   .form-textarea::placeholder {
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   .doc-list {
@@ -360,7 +360,7 @@
 
   .doc-empty {
     font-size: 11px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     font-style: italic;
     padding: 6px 0;
   }
@@ -370,7 +370,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 8px;
-    background: var(--bg-elevated, #252542);
+    background: var(--bg-elevated);
     border-radius: 4px;
     margin-bottom: 4px;
   }
@@ -388,7 +388,7 @@
 
   .doc-name {
     font-size: 11px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -396,14 +396,14 @@
 
   .doc-size {
     font-size: 10px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     flex-shrink: 0;
   }
 
   .doc-remove-btn {
     background: transparent;
     border: none;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 11px;
     padding: 2px 5px;
@@ -423,9 +423,9 @@
     padding: 6px 12px;
     font-size: 11px;
     font-weight: 500;
-    color: var(--accent, #7c5cfc);
+    color: var(--accent);
     background: rgba(232, 163, 61, 0.1);
-    border: 1px solid var(--accent, #7c5cfc);
+    border: 1px solid var(--accent);
     border-radius: 4px;
     cursor: pointer;
     transition: all 120ms;
@@ -446,9 +446,9 @@
     padding: 7px 14px;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     background: rgba(124, 92, 252, 0.15);
-    border: 1px solid var(--accent, #7c5cfc);
+    border: 1px solid var(--accent);
     border-radius: 4px;
     cursor: pointer;
     transition: all 120ms;

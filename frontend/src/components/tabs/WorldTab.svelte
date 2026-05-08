@@ -106,8 +106,8 @@
   }
 
   .entry-card {
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 14px;
   }
@@ -118,7 +118,7 @@
     gap: 10px;
     margin-bottom: 10px;
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--border, #3a3a5c);
+    border-bottom: 1px solid var(--border);
   }
 
   .entry-meta {
@@ -130,7 +130,7 @@
     font-size: 13px;
     font-weight: 600;
     margin-bottom: 6px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .tag-list {
@@ -142,16 +142,16 @@
   .tag-pill {
     font-size: 9px;
     padding: 2px 6px;
-    background: rgba(124, 92, 252, 0.1);
-    color: var(--accent, #7c5cfc);
+    background: rgba(232, 163, 61, 0.1);
+    color: var(--accent);
     border-radius: 3px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
   }
 
   .copy-btn {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text-muted, #6b6b8a);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     cursor: pointer;
     border-radius: 4px;
     padding: 5px 8px;
@@ -161,14 +161,14 @@
   }
 
   .copy-btn:hover {
-    color: var(--text, #e0e0e0);
-    background: var(--surface-hover, #2a2a4a);
+    color: var(--text);
+    background: var(--surface-hover);
   }
 
   .entry-content {
     font-size: 12px;
     line-height: 1.6;
-    color: var(--text-secondary, #a0a0a0);
+    color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -180,7 +180,7 @@
     justify-content: center;
     height: 100%;
     gap: 8px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   .placeholder-icon {
@@ -191,12 +191,12 @@
   .placeholder-text {
     font-size: 13px;
     font-weight: 500;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .placeholder-hint {
     font-size: 11px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     text-align: center;
     max-width: 200px;
   }

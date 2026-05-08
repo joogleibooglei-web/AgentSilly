@@ -87,21 +87,21 @@
   }
 
   .message.assistant .msg-bubble {
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text, #e0e0e0);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
   }
 
   .message.user .msg-bubble {
-    background: rgba(124, 92, 252, 0.12);
-    border: 1px solid rgba(124, 92, 252, 0.3);
-    color: var(--text, #e0e0e0);
+    background: var(--accent-muted);
+    border: 1px solid var(--accent-border);
+    color: var(--text);
   }
 
   .message.system .msg-bubble {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text-muted, #6b6b8a);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     font-size: 11px;
     text-align: center;
     font-style: italic;
@@ -111,7 +111,7 @@
     font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     display: block;
     margin-bottom: 4px;
   }
@@ -125,21 +125,21 @@
   }
 
   .msg-bubble :global(.inline-code) {
-    background: var(--bg-elevated, #252542);
+    background: var(--bg-elevated);
     padding: 1px 4px;
     border-radius: 3px;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     font-size: 11px;
   }
 
   .msg-bubble :global(.code-block) {
-    background: var(--bg-elevated, #252542);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 8px 10px;
     margin: 6px 0;
     overflow-x: auto;
-    font-family: var(--mono, 'JetBrains Mono', 'Fira Code', monospace);
+    font-family: var(--mono);
     font-size: 11px;
     line-height: 1.4;
   }

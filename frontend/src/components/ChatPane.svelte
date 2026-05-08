@@ -223,8 +223,8 @@
     align-items: center;
     gap: 8px;
     padding: 8px 14px;
-    border-bottom: 1px solid var(--border, #3a3a5c);
-    background: var(--bg-elevated, #252542);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated);
     flex-shrink: 0;
   }
 
@@ -232,13 +232,13 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: var(--accent, #7c5cfc);
+    background: var(--accent);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
     font-size: 12px;
-    color: white;
+    color: #1b1b1b;
     position: relative;
     flex-shrink: 0;
   }
@@ -250,16 +250,16 @@
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: var(--text-muted, #6b6b8a);
-    border: 2px solid var(--bg-elevated, #252542);
+    background: var(--text-muted);
+    border: 2px solid var(--bg-elevated);
   }
 
   .status-dot.active {
-    background: var(--success, #4caf50);
+    background: var(--success);
   }
 
   .status-dot.thinking {
-    background: var(--warning, #ff9800);
+    background: var(--warning);
     animation: pulse 1s ease-in-out infinite;
   }
 
@@ -273,21 +273,21 @@
   .eni-name {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
   }
 
   .eni-state {
     font-size: 10px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   /* New Chat button */
   .new-chat-btn {
     background: transparent;
-    border: 1px solid var(--border, #3a3a5c);
+    border: 1px solid var(--border);
     border-radius: 4px;
     padding: 4px 10px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     font-size: 11px;
     font-weight: 500;
     font-family: inherit;
@@ -298,9 +298,9 @@
   }
 
   .new-chat-btn:hover:not(:disabled) {
-    background: var(--bg-surface, #1f1f36);
-    color: var(--text, #e0e0e0);
-    border-color: var(--accent, #7c5cfc);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-color: var(--accent);
   }
 
   .new-chat-btn:active:not(:disabled) {
@@ -342,28 +342,28 @@
     border-radius: 6px;
     font-size: 12.5px;
     line-height: 1.55;
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
-    color: var(--text, #e0e0e0);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text);
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
   }
 
   .msg-bubble.streaming {
-    border-color: var(--accent, #7c5cfc);
+    border-color: var(--accent);
   }
 
   .cursor {
     animation: blink 1s step-end infinite;
-    color: var(--accent, #7c5cfc);
+    color: var(--accent);
   }
 
   /* Input area */
   .input-area {
     padding: 12px 14px;
-    border-top: 1px solid var(--border, #3a3a5c);
-    background: var(--bg-elevated, #252542);
+    border-top: 1px solid var(--border);
+    background: var(--bg-elevated);
     flex-shrink: 0;
   }
 
@@ -375,11 +375,11 @@
 
   .input-field {
     flex: 1;
-    background: var(--bg-surface, #1f1f36);
-    border: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 9px 12px;
-    color: var(--text, #e0e0e0);
+    color: var(--text);
     font-size: 12.5px;
     font-family: inherit;
     outline: none;
@@ -390,11 +390,11 @@
   }
 
   .input-field:focus {
-    border-color: var(--accent, #7c5cfc);
+    border-color: var(--accent);
   }
 
   .input-field::placeholder {
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
   }
 
   .input-field:disabled {
@@ -403,11 +403,11 @@
   }
 
   .send-btn {
-    background: var(--accent, #7c5cfc);
+    background: var(--accent);
     border: none;
     border-radius: 6px;
     padding: 9px 16px;
-    color: white;
+    color: #1b1b1b;
     font-size: 12px;
     font-weight: 500;
     font-family: inherit;
@@ -417,7 +417,7 @@
   }
 
   .send-btn:hover:not(:disabled) {
-    background: var(--accent-hover, #9178ff);
+    background: var(--accent-hover);
   }
 
   .send-btn:active:not(:disabled) {
@@ -430,7 +430,7 @@
   }
 
   .stop-btn {
-    background: var(--error, #f44336);
+    background: var(--error);
     border: none;
     border-radius: 6px;
     padding: 9px 16px;
@@ -453,7 +453,7 @@
 
   .input-hint {
     font-size: 10px;
-    color: var(--text-muted, #6b6b8a);
+    color: var(--text-muted);
     margin-top: 5px;
   }
 
@@ -479,7 +479,7 @@
     gap: 8px;
     padding: 6px 14px;
     background: var(--warning-bg, rgba(255, 152, 0, 0.1));
-    border-bottom: 1px solid var(--warning, #ff9800);
+    border-bottom: 1px solid var(--warning);
     flex-shrink: 0;
     animation: fadeIn 200ms ease;
   }
@@ -488,14 +488,14 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--warning, #ff9800);
+    background: var(--warning);
     animation: pulse 1s ease-in-out infinite;
   }
 
   .reconnect-text {
     font-size: 11px;
     font-weight: 500;
-    color: var(--warning, #ff9800);
+    color: var(--warning);
   }
 
   /* Disconnected banner */
@@ -505,7 +505,7 @@
     justify-content: center;
     padding: 5px 14px;
     background: var(--error-bg, rgba(244, 67, 54, 0.08));
-    border-bottom: 1px solid var(--error, #f44336);
+    border-bottom: 1px solid var(--error);
     flex-shrink: 0;
     animation: fadeIn 200ms ease;
   }
@@ -513,6 +513,6 @@
   .disconnected-text {
     font-size: 11px;
     font-weight: 500;
-    color: var(--error, #f44336);
+    color: var(--error);
   }
 </style>
