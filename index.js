@@ -14,7 +14,7 @@ const config = require('./lib/config');
 const { getBinaryName, checkForUpdate } = require('./lib/binary');
 const sidecar = require('./lib/sidecar');
 const uiInstaller = require('./lib/ui-installer');
-const registerRoutes = require('./lib/routes');
+const { registerRoutes } = require('./lib/routes');
 
 /**
  * Initialize the ENI World Builder plugin.
