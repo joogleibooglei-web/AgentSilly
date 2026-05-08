@@ -112,26 +112,36 @@ get_st_path() {
     echo -e "  ${DIM}Enter the full path to your SillyTavern directory${RESET}"
     echo -e "  ${DIM}(e.g., /home/user/SillyTavern or C:\\Users\\user\\SillyTavern)${RESET}"
     echo ""
-    printf "  ${BOLD}Path:${RESET} "
-    read -r ST_PATH
+    while true; do
+        printf "  ${BOLD}Path:${RESET} "
+        read -r ST_PATH < /dev/tty
 
-    # Expand ~ if present
-    ST_PATH="${ST_PATH/#\~/$HOME}"
+        # Expand ~ if present
+        ST_PATH="${ST_PATH/#\~/$HOME}"
 
-    # Remove trailing slash
-    ST_PATH="${ST_PATH%/}"
+        # Remove trailing slash
+        ST_PATH="${ST_PATH%/}"
 
-    # Validate the path
-    if [ ! -d "$ST_PATH" ]; then
-        error "Directory not found: $ST_PATH"
-        exit 1
-    fi
+        if [ -z "$ST_PATH" ]; then
+            error "Path cannot be empty. Please try again."
+            echo ""
+            continue
+        fi
+
+        if [ ! -d "$ST_PATH" ]; then
+            error "Directory not found: $ST_PATH"
+            echo ""
+            continue
+        fi
+
+        break
+    done
 
     # Check if it looks like a SillyTavern installation
     if [ ! -f "$ST_PATH/server.js" ] && [ ! -f "$ST_PATH/start.sh" ] && [ ! -f "$ST_PATH/package.json" ]; then
         warn "This doesn't look like a SillyTavern directory (no server.js or start.sh found)"
         printf "  Continue anyway? [y/N] "
-        read -r confirm
+        read -r confirm < /dev/tty
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             echo ""
             info "Installation cancelled."
@@ -188,7 +198,7 @@ install_plugin() {
     if [ -d "$PLUGIN_DIR" ]; then
         warn "ENI World Builder is already installed at $PLUGIN_DIR"
         printf "  Reinstall (pull latest)? [Y/n] "
-        read -r confirm
+        read -r confirm < /dev/tty
         if [[ "$confirm" =~ ^[Nn]$ ]]; then
             echo ""
             info "Installation cancelled."
