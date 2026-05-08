@@ -1,0 +1,12 @@
+{
+  "display_name": "ENI World Builder",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "dist/index.js",
+  "css": "dist/index.css",
+  "author": "ENI World Builder Team",
+  "version": "0.1.0",
+  "homePage": "",
+  "auto_update": false
+}

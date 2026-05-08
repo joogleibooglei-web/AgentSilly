@@ -5,9 +5,13 @@ use tracing::info;
 /// Top-level application configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
-    /// Port for the WebSocket and HTTP server.
+    /// Port for the WebSocket server.
     #[serde(default = "default_port")]
     pub listen_port: u16,
+
+    /// Port for the HTTP REST API server.
+    #[serde(default = "default_http_port")]
+    pub http_port: u16,
 
     /// Path to the SQLite database file.
     #[serde(default = "default_db_path")]
@@ -71,6 +75,10 @@ fn default_port() -> u16 {
     7842
 }
 
+fn default_http_port() -> u16 {
+    7843
+}
+
 fn default_db_path() -> String {
     "eni-sidecar.db".to_string()
 }
@@ -95,6 +103,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         Self {
             listen_port: default_port(),
+            http_port: default_http_port(),
             db_path: default_db_path(),
             max_iterations: default_max_iterations(),
             sillytavern: StConfig::default(),
@@ -194,6 +203,7 @@ mod tests {
     fn test_default_config() {
         let config = AppConfig::default();
         assert_eq!(config.listen_port, 7842);
+        assert_eq!(config.http_port, 7843);
         assert_eq!(config.db_path, "eni-sidecar.db");
         assert_eq!(config.max_iterations, 15);
         assert_eq!(config.sillytavern.base_url, "http://localhost:8000");

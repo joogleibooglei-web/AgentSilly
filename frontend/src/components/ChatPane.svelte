@@ -1,0 +1,406 @@
+<script lang="ts">
+  import { onDestroy, tick } from 'svelte';
+  import { conversation, addUserMessage, type Message } from '../lib/stores/conversation';
+  import { ui, type AgentStatus } from '../lib/stores/ui';
+  import { getWsClient } from '../lib/ws/client';
+  import MessageBubble from './MessageBubble.svelte';
+  import ToolCallCard from './ToolCallCard.svelte';
+  import ThinkingBlock from './ThinkingBlock.svelte';
+  import ModelSelector from './ModelSelector.svelte';
+
+  let messages: Message[] = $state([]);
+  let isStreaming = $state(false);
+  let streamingContent = $state('');
+  let streamingThinking = $state('');
+  let activeToolCall: { name: string; description: string; success?: boolean } | null = $state(null);
+  let agentStatus: AgentStatus = $state('idle');
+
+  let inputValue = $state('');
+  let messagesEl: HTMLDivElement | undefined = $state(undefined);
+  let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
+
+  const unsubConversation = conversation.subscribe(($c) => {
+    messages = $c.messages;
+    isStreaming = $c.isStreaming;
+    streamingContent = $c.streamingContent;
+    streamingThinking = $c.streamingThinking;
+    activeToolCall = $c.activeToolCall;
+    scrollToBottom();
+  });
+
+  const unsubUi = ui.subscribe(($ui) => {
+    agentStatus = $ui.agentStatus;
+  });
+
+  async function scrollToBottom() {
+    await tick();
+    if (messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  }
+
+  function getStatusText(status: AgentStatus): string {
+    switch (status) {
+      case 'idle': return 'Ready to help';
+      case 'thinking': return 'Thinking...';
+      case 'tool_executing': return 'Executing tool...';
+      default: return 'Ready to help';
+    }
+  }
+
+  function handleSend() {
+    const content = inputValue.trim();
+    if (!content) return;
+
+    addUserMessage(content);
+    const wsClient = getWsClient();
+    wsClient.sendUserMessage(content);
+    inputValue = '';
+    resizeTextarea();
+  }
+
+  function handleStop() {
+    const wsClient = getWsClient();
+    wsClient.sendCancel();
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (isStreaming) return;
+      handleSend();
+    }
+  }
+
+  function handleInput() {
+    resizeTextarea();
+  }
+
+  function resizeTextarea() {
+    if (!textareaEl) return;
+    textareaEl.style.height = 'auto';
+    textareaEl.style.height = Math.min(textareaEl.scrollHeight, 120) + 'px';
+  }
+
+  onDestroy(() => {
+    unsubConversation();
+    unsubUi();
+  });
+</script>
+
+<div class="chat-pane">
+  <!-- Status bar -->
+  <div class="eni-status">
+    <div class="eni-avatar">
+      E
+      <div class="status-dot" class:active={agentStatus === 'idle'} class:thinking={agentStatus !== 'idle'}></div>
+    </div>
+    <div class="eni-info">
+      <span class="eni-name">ENI</span>
+      <span class="eni-state">{getStatusText(agentStatus)}</span>
+    </div>
+    <ModelSelector />
+  </div>
+
+  <!-- Messages area -->
+  <div class="messages" bind:this={messagesEl}>
+    {#if messages.length === 0 && !isStreaming}
+      <div class="welcome-message">
+        <div class="message assistant">
+          <div class="msg-bubble">Hey! I'm ENI, your world-building assistant. What are we working on today?</div>
+        </div>
+      </div>
+    {/if}
+
+    {#each messages as message (message.id)}
+      {#if message.toolCall}
+        <ToolCallCard
+          name={message.toolCall.name}
+          description={message.toolCall.description}
+          success={message.toolCall.success}
+        />
+      {:else if message.thinking}
+        <ThinkingBlock content={message.thinking} />
+        <MessageBubble {message} />
+      {:else}
+        <MessageBubble {message} />
+      {/if}
+    {/each}
+
+    <!-- Active tool call indicator -->
+    {#if activeToolCall}
+      <ToolCallCard
+        name={activeToolCall.name}
+        description={activeToolCall.description}
+        isActive={true}
+      />
+    {/if}
+
+    <!-- Streaming thinking block -->
+    {#if streamingThinking}
+      <ThinkingBlock content={streamingThinking} isActive={true} />
+    {/if}
+
+    <!-- Streaming message -->
+    {#if isStreaming && streamingContent}
+      <div class="message assistant">
+        <div class="msg-bubble streaming">{streamingContent}<span class="cursor">▊</span></div>
+      </div>
+    {/if}
+  </div>
+
+  <!-- Input area -->
+  <div class="input-area">
+    <div class="input-row">
+      <textarea
+        class="input-field"
+        placeholder="Message ENI..."
+        rows="1"
+        bind:this={textareaEl}
+        bind:value={inputValue}
+        onkeydown={handleKeydown}
+        oninput={handleInput}
+        disabled={isStreaming}
+      ></textarea>
+      {#if isStreaming}
+        <button class="stop-btn" onclick={handleStop}>Stop</button>
+      {:else}
+        <button class="send-btn" onclick={handleSend} disabled={!inputValue.trim()}>Send</button>
+      {/if}
+    </div>
+    <div class="input-hint">Enter to send · Shift+Enter for new line</div>
+  </div>
+</div>
+
+<style>
+  .chat-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* Status bar */
+  .eni-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated, #252542);
+    flex-shrink: 0;
+  }
+
+  .eni-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent, #7c5cfc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    color: white;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .status-dot {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-muted, #6b6b8a);
+    border: 2px solid var(--bg-elevated, #252542);
+  }
+
+  .status-dot.active {
+    background: var(--success, #4caf50);
+  }
+
+  .status-dot.thinking {
+    background: var(--warning, #ff9800);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .eni-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .eni-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text, #e0e0e0);
+  }
+
+  .eni-state {
+    font-size: 10px;
+    color: var(--text-muted, #6b6b8a);
+  }
+
+  /* Messages */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .welcome-message {
+    display: contents;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    max-width: 90%;
+    animation: fadeIn 200ms ease;
+  }
+
+  .message.assistant {
+    align-self: flex-start;
+  }
+
+  .msg-bubble {
+    padding: 9px 13px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    background: var(--bg-surface, #1f1f36);
+    border: 1px solid var(--border, #3a3a5c);
+    color: var(--text, #e0e0e0);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+  }
+
+  .msg-bubble.streaming {
+    border-color: var(--accent, #7c5cfc);
+  }
+
+  .cursor {
+    animation: blink 1s step-end infinite;
+    color: var(--accent, #7c5cfc);
+  }
+
+  /* Input area */
+  .input-area {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border, #3a3a5c);
+    background: var(--bg-elevated, #252542);
+    flex-shrink: 0;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+
+  .input-field {
+    flex: 1;
+    background: var(--bg-surface, #1f1f36);
+    border: 1px solid var(--border, #3a3a5c);
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: var(--text, #e0e0e0);
+    font-size: 12.5px;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    min-height: 38px;
+    max-height: 120px;
+    transition: border-color 150ms;
+  }
+
+  .input-field:focus {
+    border-color: var(--accent, #7c5cfc);
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted, #6b6b8a);
+  }
+
+  .input-field:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .send-btn {
+    background: var(--accent, #7c5cfc);
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 120ms, transform 80ms;
+    white-space: nowrap;
+  }
+
+  .send-btn:hover:not(:disabled) {
+    background: var(--accent-hover, #9178ff);
+  }
+
+  .send-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .stop-btn {
+    background: var(--error, #f44336);
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 120ms, transform 80ms;
+    white-space: nowrap;
+  }
+
+  .stop-btn:hover {
+    background: #e53935;
+  }
+
+  .stop-btn:active {
+    transform: scale(0.96);
+  }
+
+  .input-hint {
+    font-size: 10px;
+    color: var(--text-muted, #6b6b8a);
+    margin-top: 5px;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
