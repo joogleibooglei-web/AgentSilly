@@ -202,6 +202,9 @@ async fn handle_connection(
                     ClientMessage::UpdateConfig { key, value } => {
                         handle_update_config(&key, &value, &state, &ws_sender).await;
                     }
+                    ClientMessage::TestConnection => {
+                        handle_test_connection(&state, &ws_sender).await;
+                    }
                 }
             }
             Message::Close(_) => {
@@ -642,4 +645,108 @@ async fn handle_update_config(
             key: key.to_string(),
         })
         .await;
+}
+
+/// Handle a test connection request — verify the LLM API is reachable with current settings.
+async fn handle_test_connection(state: &Arc<AppState>, ws_sender: &WebSocketSender) {
+    // Read the model profile from the database (same logic as handle_user_message)
+    let profile = {
+        let db_guard = state.db.lock().unwrap();
+        let get_config = |key: &str| -> Option<String> {
+            db_guard
+                .conn()
+                .query_row(
+                    "SELECT value FROM config WHERE key = ?1",
+                    rusqlite::params![key],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
+        };
+
+        let base_url = get_config("model_profile.baseUrl");
+        let api_key = get_config("model_profile.apiKey");
+        let model = get_config("model_profile.model");
+
+        let config_profile = state.config.default_model().cloned();
+        let fallback = config_profile.unwrap_or(crate::config::ModelProfile {
+            name: "default".to_string(),
+            base_url: "http://localhost:11434/v1".to_string(),
+            api_key: "none".to_string(),
+            model: "llama3".to_string(),
+            temperature: 0.7,
+            max_tokens: 4096,
+            is_default: true,
+        });
+
+        crate::config::ModelProfile {
+            name: "default".to_string(),
+            base_url: base_url.unwrap_or(fallback.base_url),
+            api_key: api_key.unwrap_or(fallback.api_key),
+            model: model.unwrap_or(fallback.model),
+            temperature: fallback.temperature,
+            max_tokens: fallback.max_tokens,
+            is_default: true,
+        }
+    };
+
+    info!(base_url = %profile.base_url, model = %profile.model, "Testing LLM connection");
+
+    // Make a minimal chat completion request to verify connectivity
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .unwrap();
+
+    let url = format!("{}/chat/completions", profile.base_url.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "model": profile.model,
+        "messages": [{"role": "user", "content": "Hi"}],
+        "max_tokens": 1,
+        "stream": false,
+    });
+
+    match client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", profile.api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                info!("LLM connection test successful");
+                let _ = ws_sender
+                    .send(WsEvent::SystemMessage {
+                        content: format!(
+                            "✓ Connection successful! Model '{}' is reachable at {}",
+                            profile.model, profile.base_url
+                        ),
+                    })
+                    .await;
+            } else {
+                let body_text = response.text().await.unwrap_or_default();
+                let msg = format!(
+                    "✗ Connection failed (HTTP {}): {}",
+                    status.as_u16(),
+                    body_text.chars().take(200).collect::<String>()
+                );
+                warn!(status = %status, "LLM connection test failed");
+                let _ = ws_sender.send(WsEvent::Error { message: msg }).await;
+            }
+        }
+        Err(e) => {
+            let msg = if e.is_timeout() {
+                format!("✗ Connection timed out after 15s: {}", profile.base_url)
+            } else if e.is_connect() {
+                format!("✗ Cannot reach server at {}", profile.base_url)
+            } else {
+                format!("✗ Connection error: {}", e)
+            };
+            error!(error = %e, "LLM connection test error");
+            let _ = ws_sender.send(WsEvent::Error { message: msg }).await;
+        }
+    }
 }

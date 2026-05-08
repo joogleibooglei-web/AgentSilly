@@ -52,6 +52,11 @@
     sendConfigUpdate(`model_profile.${field}`, value);
   }
 
+  function handleTestConnection(): void {
+    const ws = getWsClient();
+    ws.send({ type: 'test_connection' } as any);
+  }
+
   function handlePostCardBlur(): void {
     sendConfigUpdate('postCardPrompt', postCardPrompt);
   }
@@ -187,6 +192,7 @@
           />
         </div>
       </div>
+      <button class="test-btn" onclick={handleTestConnection}>Test Connection</button>
     </div>
 
     <!-- Post-Card Prompt -->
@@ -418,7 +424,7 @@
     font-size: 11px;
     font-weight: 500;
     color: var(--accent, #7c5cfc);
-    background: rgba(124, 92, 252, 0.1);
+    background: rgba(232, 163, 61, 0.1);
     border: 1px solid var(--accent, #7c5cfc);
     border-radius: 4px;
     cursor: pointer;
@@ -426,11 +432,30 @@
   }
 
   .upload-btn:hover {
-    background: rgba(124, 92, 252, 0.2);
+    background: rgba(232, 163, 61, 0.2);
   }
 
   .file-input-hidden {
     display: none;
+  }
+
+  .test-btn {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 7px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text, #e0e0e0);
+    background: rgba(124, 92, 252, 0.15);
+    border: 1px solid var(--accent, #7c5cfc);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 120ms;
+  }
+
+  .test-btn:hover {
+    background: rgba(124, 92, 252, 0.3);
   }
 
 

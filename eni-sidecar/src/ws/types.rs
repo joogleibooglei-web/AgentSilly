@@ -34,6 +34,8 @@ pub enum ClientMessage {
         key: String,
         value: serde_json::Value,
     },
+    /// User requests a test of the LLM connection with current settings.
+    TestConnection,
 }
 
 /// A sender wrapper that serializes `WsEvent` variants and relays them
