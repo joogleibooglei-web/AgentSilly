@@ -20,6 +20,7 @@ use crate::config::AppConfig;
 use crate::context::ContextBuilder;
 use crate::db::Database;
 use crate::llm::LlmClient;
+use crate::prompts::ENI_SYSTEM_PROMPT;
 use crate::search::SearchIndex;
 use crate::tools::{
     self, ToolDispatcher, ExportCardTool, ListCharactersTool, ReadCharacterTool,
@@ -279,11 +280,26 @@ async fn handle_user_message(
     tokio::spawn(async move {
         let conv_id = conversation_id.lock().await.clone();
 
-        // Build a fresh AgentContext for this turn
+        // Load the post-card prompt from the database config table (if set)
+        let post_card_prompt = {
+            let db_guard = state.db.lock().unwrap();
+            db_guard
+                .conn()
+                .query_row(
+                    "SELECT value FROM config WHERE key = 'post_card_prompt'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
+                .unwrap_or_default()
+        };
+
+        // Build a fresh AgentContext for this turn using ENI's base personality prompt
         let context_builder = ContextBuilder::new(
-            "You are ENI, a creative writing assistant and world-builder.".to_string(),
-            String::new(),
-            4096,
+            ENI_SYSTEM_PROMPT.to_string(),
+            post_card_prompt,
+            state.config.default_model().map(|p| p.max_tokens as usize).unwrap_or(4096),
         );
 
         // Open a fresh DB connection for this turn

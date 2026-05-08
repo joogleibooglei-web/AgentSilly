@@ -105,5 +105,8 @@ function exit(): void {
   if (toggleBtn) toggleBtn.remove();
 }
 
+// Auto-initialize when the script loads (ST loads extension JS via manifest)
+init();
+
 // Export for ST extension system
 export { init, exit, EXTENSION_NAME };

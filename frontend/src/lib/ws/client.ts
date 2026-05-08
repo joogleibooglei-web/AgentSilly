@@ -20,6 +20,9 @@ import {
   addSystemMessage,
   setToolStart,
   setToolEnd,
+  finalizeStreaming,
+  setMessages,
+  type Message,
 } from '../stores/conversation';
 import {
   setAgentStatus,
@@ -27,7 +30,7 @@ import {
   setUndoAvailable,
   type RightPaneTab,
 } from '../stores/ui';
-import { setActiveModel, setModelProfiles, updateConfig } from '../stores/config';
+import { setActiveModel, setModelProfiles, updateConfig, type ModelProfile } from '../stores/config';
 
 // --- Protocol Types ---
 
@@ -56,6 +59,7 @@ export type ServerMessage =
 
 export interface WsClientOptions {
   port?: number;
+  httpPort?: number;
   host?: string;
   maxReconnectAttempts?: number;
   baseReconnectDelay?: number;
@@ -64,6 +68,7 @@ export interface WsClientOptions {
 
 const DEFAULT_OPTIONS: Required<WsClientOptions> = {
   port: 7842,
+  httpPort: 7843,
   host: '127.0.0.1',
   maxReconnectAttempts: 10,
   baseReconnectDelay: 1000,
@@ -100,6 +105,8 @@ export class WsClient {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       setConnected();
+      this.fetchConfig();
+      this.fetchConversationHistory();
     };
 
     this.ws.onmessage = (event: MessageEvent) => {
@@ -183,6 +190,95 @@ export class WsClient {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /**
+   * Fetch model profiles and config from the sidecar HTTP API on connect.
+   * Populates the config store with available model profiles.
+   */
+  private async fetchConfig(): Promise<void> {
+    const url = `http://${this.options.host}:${this.options.httpPort}/config`;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn('[WsClient] Failed to fetch config:', response.status);
+        return;
+      }
+      const data = await response.json();
+      if (data.model_profiles && Array.isArray(data.model_profiles)) {
+        const profiles: ModelProfile[] = data.model_profiles.map((p: Record<string, unknown>) => ({
+          id: (p.name as string) || (p.id as string),
+          name: p.name as string,
+          baseUrl: p.base_url as string,
+          apiKey: '', // API key is not exposed via GET /config for security
+          model: p.model as string,
+          temperature: p.temperature as number,
+          maxTokens: p.max_tokens as number,
+          isDefault: p.is_default as boolean,
+        }));
+        setModelProfiles(profiles);
+      }
+    } catch (e) {
+      console.warn('[WsClient] Failed to fetch config from sidecar:', e);
+    }
+  }
+
+  /**
+   * Fetch the most recent conversation history from the sidecar HTTP API on connect.
+   * Populates the conversation store with restored messages.
+   */
+  private async fetchConversationHistory(): Promise<void> {
+    const baseUrl = `http://${this.options.host}:${this.options.httpPort}`;
+    try {
+      // First, get the list of conversations
+      const listResponse = await fetch(`${baseUrl}/conversations`);
+      if (!listResponse.ok) {
+        console.warn('[WsClient] Failed to fetch conversations list:', listResponse.status);
+        return;
+      }
+      const conversations: Array<{ id: string; title: string; created_at: string }> = await listResponse.json();
+      if (!conversations || conversations.length === 0) {
+        return; // No conversations to restore
+      }
+
+      // Get the most recent conversation (first in the list, assumed sorted by recency)
+      const latestConversation = conversations[0];
+
+      // Fetch messages for the latest conversation
+      const messagesResponse = await fetch(`${baseUrl}/conversations/${latestConversation.id}`);
+      if (!messagesResponse.ok) {
+        console.warn('[WsClient] Failed to fetch conversation messages:', messagesResponse.status);
+        return;
+      }
+      const data = await messagesResponse.json();
+      const rawMessages: Array<{
+        id: string;
+        role: string;
+        content: string;
+        created_at?: string;
+        metadata?: string;
+      }> = data.messages || data;
+
+      if (!rawMessages || rawMessages.length === 0) {
+        return;
+      }
+
+      // Map raw messages to the frontend Message format
+      const restoredMessages: Message[] = rawMessages
+        .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+        .map((m) => ({
+          id: m.id || crypto.randomUUID(),
+          role: m.role as Message['role'],
+          content: m.content,
+          timestamp: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+        }));
+
+      if (restoredMessages.length > 0) {
+        setMessages(restoredMessages);
+      }
+    } catch (e) {
+      console.warn('[WsClient] Failed to fetch conversation history from sidecar:', e);
+    }
+  }
+
   // --- Private Methods ---
 
   private handleMessage(data: string): void {
@@ -229,6 +325,10 @@ export class WsClient {
 
       case 'status':
         setAgentStatus(msg.state);
+        // When agent returns to idle (e.g., after cancellation), finalize any in-progress streaming
+        if (msg.state === 'idle') {
+          finalizeStreaming();
+        }
         break;
 
       case 'undo_available':
@@ -244,7 +344,12 @@ export class WsClient {
         break;
 
       case 'config_updated':
-        updateConfig(msg.key, null);
+        if (msg.key === 'model_profile') {
+          // Model switch confirmed by sidecar — re-fetch config to sync state
+          this.fetchConfig();
+        } else {
+          updateConfig(msg.key, null);
+        }
         break;
 
       default:

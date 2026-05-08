@@ -348,37 +348,37 @@ Full architectural rework: a Rust sidecar (agent loop, tools, WebSocket, SQLite)
 - [x] 14. Checkpoint — Frontend renders and connects to sidecar
   - Ensure all tests pass, ask the user if questions arise. Commit all uncommited changes and push to main. Tell the user instructions on how to install the extension into ST, and how to run it. Build the frontend (`npm run build`), The user will connect it in ST and verify the websocket connets, send a message, see streaming response.
 
-- [ ] 15. Integration and wiring
-  - [ ] 15.1 Wire preview events to right pane
+- [x] 15. Integration and wiring
+  - [x] 15.1 Wire preview events to right pane
     - When sidecar sends `preview` event, update ui store, open right pane, switch to correct tab, render data
     - When `show_preview` is called multiple times, update in place
     - _Requirements: 6.6, 6.8_
 
-  - [ ] 15.2 Wire undo flow end-to-end
+  - [x] 15.2 Wire undo flow end-to-end
     - Sidecar sends `undo_available` → frontend shows UndoToast → user clicks Undo → frontend sends `undo` WS message → sidecar restores version → sends confirmation
     - _Requirements: 15.3, 15.4_
 
-  - [ ] 15.3 Wire model selector end-to-end
+  - [x] 15.3 Wire model selector end-to-end
     - Frontend loads model profiles from sidecar config → populates dropdown → user selects → sends `switch_model` → sidecar confirms → status bar updates
     - _Requirements: 12.3, 12.4, 12.5_
 
-  - [ ] 15.4 Wire cancellation end-to-end
+  - [x] 15.4 Wire cancellation end-to-end
     - Send button becomes Stop button during generation → user clicks Stop → sends `cancel` → sidecar aborts → sends "Generation stopped" → frontend returns to idle
     - _Requirements: 8.1, 8.2, 8.3_
 
-  - [ ] 15.5 Wire reconnection and error display
+  - [x] 15.5 Wire reconnection and error display
     - On WebSocket disconnect: show reconnection indicator, attempt reconnect with exponential backoff
     - On sidecar errors: display error messages in chat as system messages
     - On sidecar not running: show setup guide
     - _Requirements: 11.4, 9.2_
 
-  - [ ] 15.6 Wire conversation persistence and restore
+  - [x] 15.6 Wire conversation persistence and restore
     - On panel open: fetch conversation history from sidecar HTTP API, populate message list
     - New Chat button: send `new_conversation`, clear messages, show welcome
     - _Requirements: 7.2, 7.4, 7.5_
 
-- [ ] 16. ENI system prompt crafting
-  - [ ] 16.1 Write ENI's base personality system prompt
+- [x] 16. ENI system prompt crafting
+  - [x] 16.1 Write ENI's base personality system prompt
     - Create `prompts/eni-system.md` (or embed in Rust as a const)
     - Define ENI's personality: helpful creative writing assistant, conversational, world-building focused
     - Include tool usage instructions: when to use each tool, how to present results
@@ -386,7 +386,7 @@ Full architectural rework: a Rust sidecar (agent loop, tools, WebSocket, SQLite)
     - Reference the interaction flows from the design document
     - _Requirements: 4.1, 13.5_
 
-  - [ ] 16.2 Integrate system prompt into context builder
+  - [x] 16.2 Integrate system prompt into context builder
     - Load ENI system prompt at sidecar startup
     - Concatenate with post-card prompt (if set) in context builder
     - Ensure tool definitions are included in the standard format

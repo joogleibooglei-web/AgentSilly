@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import { conversation, addUserMessage, type Message } from '../lib/stores/conversation';
+  import { conversation, addUserMessage, clearConversation, type Message } from '../lib/stores/conversation';
   import { ui, type AgentStatus } from '../lib/stores/ui';
   import { connection, type ConnectionState, type PlatformInfo } from '../lib/stores/connection';
   import { getWsClient } from '../lib/ws/client';
@@ -73,6 +73,12 @@
     wsClient.sendCancel();
   }
 
+  function handleNewChat() {
+    const wsClient = getWsClient();
+    wsClient.sendNewConversation();
+    clearConversation();
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -110,7 +116,25 @@
       <span class="eni-state">{getStatusText(agentStatus)}</span>
     </div>
     <ModelSelector />
+    <button
+      class="new-chat-btn"
+      onclick={handleNewChat}
+      disabled={connectionState !== 'connected' || isStreaming}
+      title="Start a new conversation"
+    >New Chat</button>
   </div>
+
+  <!-- Reconnection banner -->
+  {#if connectionState === 'reconnecting'}
+    <div class="reconnect-banner">
+      <span class="reconnect-dot"></span>
+      <span class="reconnect-text">Reconnecting to sidecar...</span>
+    </div>
+  {:else if connectionState === 'disconnected' && !isStreaming}
+    <div class="disconnected-banner">
+      <span class="disconnected-text">Disconnected from sidecar</span>
+    </div>
+  {/if}
 
   <!-- Messages area -->
   <div class="messages" bind:this={messagesEl}>
@@ -166,18 +190,18 @@
     <div class="input-row">
       <textarea
         class="input-field"
-        placeholder="Message ENI..."
+        placeholder={connectionState === 'connected' ? 'Message ENI...' : 'Waiting for connection...'}
         rows="1"
         bind:this={textareaEl}
         bind:value={inputValue}
         onkeydown={handleKeydown}
         oninput={handleInput}
-        disabled={isStreaming}
+        disabled={isStreaming || connectionState !== 'connected'}
       ></textarea>
       {#if isStreaming}
         <button class="stop-btn" onclick={handleStop}>Stop</button>
       {:else}
-        <button class="send-btn" onclick={handleSend} disabled={!inputValue.trim()}>Send</button>
+        <button class="send-btn" onclick={handleSend} disabled={!inputValue.trim() || connectionState !== 'connected'}>Send</button>
       {/if}
     </div>
     <div class="input-hint">Enter to send · Shift+Enter for new line</div>
@@ -255,6 +279,37 @@
   .eni-state {
     font-size: 10px;
     color: var(--text-muted, #6b6b8a);
+  }
+
+  /* New Chat button */
+  .new-chat-btn {
+    background: transparent;
+    border: 1px solid var(--border, #3a3a5c);
+    border-radius: 4px;
+    padding: 4px 10px;
+    color: var(--text-muted, #6b6b8a);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .new-chat-btn:hover:not(:disabled) {
+    background: var(--bg-surface, #1f1f36);
+    color: var(--text, #e0e0e0);
+    border-color: var(--accent, #7c5cfc);
+  }
+
+  .new-chat-btn:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .new-chat-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   /* Messages */
@@ -414,5 +469,50 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+  }
+
+  /* Reconnection banner */
+  .reconnect-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: var(--warning-bg, rgba(255, 152, 0, 0.1));
+    border-bottom: 1px solid var(--warning, #ff9800);
+    flex-shrink: 0;
+    animation: fadeIn 200ms ease;
+  }
+
+  .reconnect-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--warning, #ff9800);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .reconnect-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--warning, #ff9800);
+  }
+
+  /* Disconnected banner */
+  .disconnected-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 14px;
+    background: var(--error-bg, rgba(244, 67, 54, 0.08));
+    border-bottom: 1px solid var(--error, #f44336);
+    flex-shrink: 0;
+    animation: fadeIn 200ms ease;
+  }
+
+  .disconnected-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--error, #f44336);
   }
 </style>

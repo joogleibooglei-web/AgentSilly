@@ -9,6 +9,7 @@ mod context;
 mod db;
 mod http;
 mod llm;
+mod prompts;
 mod search;
 mod tools;
 mod versioning;

@@ -128,6 +128,39 @@ export function setToolEnd(name: string, success: boolean): void {
   });
 }
 
+/**
+ * Finalize streaming on cancellation.
+ * If there's partial streaming content, save it as a message (marked incomplete).
+ * Reset all streaming state so the UI returns to idle.
+ */
+export function finalizeStreaming(): void {
+  conversation.update((s) => {
+    if (!s.isStreaming) return s;
+
+    const newMessages = [...s.messages];
+
+    // If there was partial content being streamed, save it as an incomplete assistant message
+    if (s.streamingContent.trim()) {
+      newMessages.push({
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: s.streamingContent,
+        timestamp: Date.now(),
+        thinking: s.streamingThinking || undefined,
+      });
+    }
+
+    return {
+      ...s,
+      messages: newMessages,
+      isStreaming: false,
+      streamingContent: '',
+      streamingThinking: '',
+      activeToolCall: null,
+    };
+  });
+}
+
 export function clearConversation(): void {
   conversation.set(initialState);
 }
