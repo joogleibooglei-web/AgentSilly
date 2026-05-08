@@ -1,0 +1,6 @@
+{
+  "id": "eni-world-builder",
+  "name": "ENI World Builder",
+  "description": "AI-powered world building assistant with Rust sidecar backend",
+  "version": "0.2.0"
+}
