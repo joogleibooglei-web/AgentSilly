@@ -415,8 +415,8 @@ Full architectural rework: a Rust sidecar (agent loop, tools, WebSocket, SQLite)
     - Document dev setup in `README.md`
     - _Requirements: 9.5_
 
-- [ ] 18. CI pipeline — Rust sidecar release builds + extension auto-download
-  - [ ] 18.1 Create GitHub Actions workflow for sidecar cross-compilation
+- [x] 18. CI pipeline — Rust sidecar release builds + extension auto-download
+  - [x] 18.1 Create GitHub Actions workflow for sidecar cross-compilation
     - Create `.github/workflows/release-sidecar.yml`
     - Build matrix: linux-x64, darwin-x64, darwin-arm64, win32-x64
     - Trigger on version tags (`v*`) — only compiles the Rust sidecar, not the frontend
@@ -426,14 +426,14 @@ Full architectural rework: a Rust sidecar (agent loop, tools, WebSocket, SQLite)
     - Upload each binary as a build artifact
     - _Requirements: 9.2_
 
-  - [ ] 18.2 Create GitHub Release job
+  - [x] 18.2 Create GitHub Release job
     - Add `release` job that depends on all build jobs
     - Download all artifacts and attach to a GitHub Release using `softprops/action-gh-release@v2`
     - Include release notes template (changelog or auto-generated)
     - Tag format: `v0.1.0`, `v0.2.0`, etc.
     - _Requirements: 9.2_
 
-  - [ ] 18.3 Implement binary auto-download in ST server plugin (`index.js`)
+  - [x] 18.3 Implement binary auto-download in ST server plugin (`index.js`)
     - On extension load, check if `bin/eni-sidecar` (platform-appropriate name) exists locally
     - If binary is present and healthy (version check via `--version` flag), spawn it normally
     - If binary is missing or outdated:
@@ -450,7 +450,7 @@ Full architectural rework: a Rust sidecar (agent loop, tools, WebSocket, SQLite)
       - Corrupt/partial download: delete partial file, retry once
     - _Requirements: 9.2, 9.4, 11.1_
 
-  - [ ] 18.4 Add first-run / download-failed UX in frontend
+  - [x] 18.4 Add first-run / download-failed UX in frontend
     - If sidecar binary is missing and auto-download fails, show a message in the chat panel explaining the situation
     - Provide a direct link to the GitHub Releases page for manual download
     - Show detected platform/arch so the user knows which binary to grab

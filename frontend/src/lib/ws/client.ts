@@ -11,6 +11,7 @@ import {
   setConnected,
   setDisconnected,
   setReconnecting,
+  setSetupRequired,
 } from '../stores/connection';
 import {
   appendToken,
@@ -256,6 +257,7 @@ export class WsClient {
     setDisconnected();
 
     if (this.reconnectAttempts >= this.options.maxReconnectAttempts) {
+      setSetupRequired();
       addSystemMessage(
         'Unable to connect to the sidecar. Please check that it is running.'
       );

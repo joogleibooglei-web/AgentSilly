@@ -2,11 +2,13 @@
   import { onDestroy, tick } from 'svelte';
   import { conversation, addUserMessage, type Message } from '../lib/stores/conversation';
   import { ui, type AgentStatus } from '../lib/stores/ui';
+  import { connection, type ConnectionState, type PlatformInfo } from '../lib/stores/connection';
   import { getWsClient } from '../lib/ws/client';
   import MessageBubble from './MessageBubble.svelte';
   import ToolCallCard from './ToolCallCard.svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
   import ModelSelector from './ModelSelector.svelte';
+  import SetupGuide from './SetupGuide.svelte';
 
   let messages: Message[] = $state([]);
   let isStreaming = $state(false);
@@ -14,6 +16,8 @@
   let streamingThinking = $state('');
   let activeToolCall: { name: string; description: string; success?: boolean } | null = $state(null);
   let agentStatus: AgentStatus = $state('idle');
+  let connectionState: ConnectionState = $state('disconnected');
+  let platformInfo: PlatformInfo = $state({ platform: 'unknown', arch: 'x64' });
 
   let inputValue = $state('');
   let messagesEl: HTMLDivElement | undefined = $state(undefined);
@@ -30,6 +34,11 @@
 
   const unsubUi = ui.subscribe(($ui) => {
     agentStatus = $ui.agentStatus;
+  });
+
+  const unsubConnection = connection.subscribe(($conn) => {
+    connectionState = $conn.state;
+    platformInfo = $conn.platformInfo;
   });
 
   async function scrollToBottom() {
@@ -85,6 +94,7 @@
   onDestroy(() => {
     unsubConversation();
     unsubUi();
+    unsubConnection();
   });
 </script>
 
@@ -104,7 +114,9 @@
 
   <!-- Messages area -->
   <div class="messages" bind:this={messagesEl}>
-    {#if messages.length === 0 && !isStreaming}
+    {#if connectionState === 'setup_required'}
+      <SetupGuide {platformInfo} />
+    {:else if messages.length === 0 && !isStreaming}
       <div class="welcome-message">
         <div class="message assistant">
           <div class="msg-bubble">Hey! I'm ENI, your world-building assistant. What are we working on today?</div>
