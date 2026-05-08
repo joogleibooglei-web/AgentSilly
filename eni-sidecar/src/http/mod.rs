@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::db::Database;
 use crate::search::SearchIndex;
@@ -21,6 +22,11 @@ pub struct HttpState {
 
 /// Build the axum router with all HTTP API routes.
 pub fn build_router(state: Arc<HttpState>) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     Router::new()
         // Health
         .route("/health", get(handlers::health))
@@ -34,6 +40,7 @@ pub fn build_router(state: Arc<HttpState>) -> Router {
         .route("/documents", post(handlers::upload_document))
         .route("/documents", get(handlers::list_documents))
         .route("/documents/{id}", delete(handlers::delete_document))
+        .layer(cors)
         .with_state(state)
 }
 

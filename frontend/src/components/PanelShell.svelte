@@ -98,13 +98,13 @@
 
 <style>
   .panel {
-    height: 100%;
+    height: calc(100% - 40px);
     background: var(--bg-deep, #1a1a2e);
     border-left: 1px solid var(--border, #3a3a5c);
     display: flex;
     flex-direction: column;
     position: fixed;
-    top: 0;
+    top: 40px;
     right: 0;
     z-index: 50;
     animation: slideIn 200ms ease;
