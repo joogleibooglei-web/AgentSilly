@@ -96,4 +96,12 @@ async function exit() {
     }
 }
 
-module.exports = { init, exit };
+module.exports = {
+    info: {
+        id: 'eni-world-builder',
+        name: 'ENI World Builder',
+        description: 'AI-powered world building assistant with Rust sidecar backend',
+    },
+    init,
+    exit,
+};
