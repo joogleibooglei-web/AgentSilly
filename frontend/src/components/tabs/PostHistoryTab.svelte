@@ -92,7 +92,7 @@
   <div class="tab-placeholder">
     <span class="placeholder-icon">📝</span>
     <span class="placeholder-text">Post-History</span>
-    <span class="placeholder-hint">Waiting for ENI to load post-history data...</span>
+    <span class="placeholder-hint">Ask ENI to generate post-history settings to see them here.</span>
   </div>
 {/if}
 

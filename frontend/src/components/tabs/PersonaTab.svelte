@@ -99,7 +99,7 @@
   <div class="tab-placeholder">
     <span class="placeholder-icon">🎭</span>
     <span class="placeholder-text">Persona preview</span>
-    <span class="placeholder-hint">Waiting for ENI to load persona data...</span>
+    <span class="placeholder-hint">Ask ENI to read or create a persona to see a preview here.</span>
   </div>
 {/if}
 

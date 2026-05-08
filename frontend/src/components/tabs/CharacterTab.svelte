@@ -120,7 +120,7 @@
   <div class="tab-placeholder">
     <span class="placeholder-icon">👤</span>
     <span class="placeholder-text">Character preview</span>
-    <span class="placeholder-hint">Waiting for ENI to load character data...</span>
+    <span class="placeholder-hint">Ask ENI to read or create a character to see a preview here.</span>
   </div>
 {/if}
 

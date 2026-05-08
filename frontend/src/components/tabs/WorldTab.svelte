@@ -89,7 +89,7 @@
   <div class="tab-placeholder">
     <span class="placeholder-icon">🌍</span>
     <span class="placeholder-text">World entries</span>
-    <span class="placeholder-hint">Waiting for ENI to load world data...</span>
+    <span class="placeholder-hint">Ask ENI to show world entries to see them here.</span>
   </div>
 {/if}
 

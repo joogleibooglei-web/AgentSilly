@@ -34,14 +34,10 @@
       model = activeProfile.model;
       temperature = activeProfile.temperature;
       maxTokens = activeProfile.maxTokens;
-      configLoaded = true;
-    } else if ($config.modelProfiles.length === 0 && $config.postCardPrompt === '') {
-      configLoaded = false;
-    } else {
-      configLoaded = true;
     }
 
     postCardPrompt = $config.postCardPrompt;
+    configLoaded = true;
   });
 
   // Subscribe to connection store
