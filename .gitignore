@@ -11,6 +11,18 @@ reference-repos/
 # Rust build artifacts
 eni-sidecar/target/
 
+# Sidecar binaries (downloaded at runtime, not committed)
+bin/
+
+# Runtime database files
+eni-sidecar/*.db
+eni-sidecar/*.db-shm
+eni-sidecar/*.db-wal
+eni-sidecar/search_index/
+
+# Frontend dev dependencies
+frontend/node_modules/
+
 # OS files
 .DS_Store
 Thumbs.db
