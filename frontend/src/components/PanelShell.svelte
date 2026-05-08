@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { ui, closeRightPane, type PanelMode } from '../lib/stores/ui';
+  import { ui, closeRightPane, openRightPane, type PanelMode } from '../lib/stores/ui';
   import ChatPane from './ChatPane.svelte';
   import RightPane from './RightPane.svelte';
   import UndoToast from './UndoToast.svelte';
@@ -79,6 +79,7 @@
     <div class="header">
       <span class="header-title">World Builder</span>
       <div class="header-actions">
+        <button class="header-btn settings-btn" onclick={() => openRightPane('settings')} aria-label="Open settings" title="Settings">⚙</button>
         <button class="header-btn close-btn" onclick={handleClose} aria-label="Close panel">✕</button>
       </div>
     </div>
