@@ -1,5 +1,6 @@
-# Kiro IDE config
-.kiro/
+# Kiro IDE config (keep specs tracked)
+.kiro/*
+!.kiro/specs/
 
 # Mockups (local design reference only)
 mockups/
