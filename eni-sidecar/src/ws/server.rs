@@ -318,12 +318,35 @@ async fn handle_user_message(
             }
         };
 
-        // Get the default model profile for the LLM client
-        let profile = state
-            .config
-            .default_model()
-            .cloned()
-            .unwrap_or_else(|| crate::config::ModelProfile {
+        // Get the default model profile for the LLM client.
+        // First check the database for user-configured values (set via the UI),
+        // then fall back to the TOML config file, then hardcoded defaults.
+        let profile = {
+            let db_guard = state.db.lock().unwrap();
+            let get_config = |key: &str| -> Option<String> {
+                db_guard
+                    .conn()
+                    .query_row(
+                        "SELECT value FROM config WHERE key = ?1",
+                        rusqlite::params![key],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .ok()
+                    .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
+            };
+
+            let base_url = get_config("model_profile.baseUrl");
+            let api_key = get_config("model_profile.apiKey");
+            let model = get_config("model_profile.model");
+            let temperature = get_config("model_profile.temperature")
+                .and_then(|v| v.parse::<f64>().ok());
+            let max_tokens = get_config("model_profile.maxTokens")
+                .and_then(|v| v.parse::<u32>().ok());
+
+            // Use DB values if any model_profile fields are set, otherwise fall back to config
+            let config_profile = state.config.default_model().cloned();
+
+            let fallback = config_profile.unwrap_or(crate::config::ModelProfile {
                 name: "default".to_string(),
                 base_url: "http://localhost:11434/v1".to_string(),
                 api_key: "none".to_string(),
@@ -332,6 +355,17 @@ async fn handle_user_message(
                 max_tokens: 4096,
                 is_default: true,
             });
+
+            crate::config::ModelProfile {
+                name: "default".to_string(),
+                base_url: base_url.unwrap_or(fallback.base_url),
+                api_key: api_key.unwrap_or(fallback.api_key),
+                model: model.unwrap_or(fallback.model),
+                temperature: temperature.unwrap_or(fallback.temperature),
+                max_tokens: max_tokens.unwrap_or(fallback.max_tokens),
+                is_default: true,
+            }
+        };
 
         let llm_client = LlmClient::new(profile);
 
