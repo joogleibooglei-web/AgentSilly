@@ -23,6 +23,7 @@ pub fn build_default_lorebook() -> Lorebook {
             CHARACTER_CARD_CONTENT,
         )
         .with_keywords(vec![
+            "character",
             "character card",
             "character cards",
             "character card instructions",
@@ -34,6 +35,7 @@ pub fn build_default_lorebook() -> Lorebook {
             "write a character",
             "edit character",
             "character description",
+            "NPC",
             "NPC card",
             "write NPC",
             "create NPC",
@@ -83,10 +85,12 @@ pub fn build_default_lorebook() -> Lorebook {
             WORLD_INFO_CONTENT,
         )
         .with_keywords(vec![
+            "world",
             "world info",
             "world information",
             "world entry",
             "world entries",
+            "lore",
             "write lore",
             "create lore",
             "edit lore",
