@@ -116,7 +116,10 @@ pub async fn run_turn(
 
         // Call the LLM with streaming
         let tx_clone = tx.clone();
+        let had_tokens = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let had_tokens_clone = had_tokens.clone();
         let token_callback: TokenCallback = Box::new(move |token: &str| {
+            had_tokens_clone.store(true, std::sync::atomic::Ordering::Relaxed);
             let event = WsEvent::Token {
                 content: token.to_string(),
             };
@@ -167,6 +170,15 @@ pub async fn run_turn(
             }
             Ok(LlmResponse::ToolCalls(tool_calls)) => {
                 debug!(count = tool_calls.len(), "LLM requested tool calls");
+
+                // If text was streamed before the tool calls, finalize it as a separate message
+                // so the frontend doesn't concatenate pre-tool and post-tool text together.
+                if had_tokens.load(std::sync::atomic::Ordering::Relaxed) {
+                    let message_id = uuid::Uuid::new_v4().to_string();
+                    let _ = tx.send(WsEvent::MessageComplete {
+                        id: message_id,
+                    }).await;
+                }
 
                 // Build the assistant message with tool calls for conversation history
                 let chat_tool_calls: Vec<ChatToolCall> = tool_calls

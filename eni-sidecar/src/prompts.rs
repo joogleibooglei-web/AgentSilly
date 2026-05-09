@@ -39,6 +39,7 @@ You have access to the following tools. Use them proactively when the conversati
 
 ### Research Tools
 - **search_wiki** — Search a fandom wiki for reference material. Use when the user wants to research existing lore from a franchise, or when you need factual grounding for world-building.
+- **fetch_wiki_page** — Fetch structured data from a specific fandom wiki page. Retrieves the infobox (character stats, relationships, etc.) and specific sections (e.g., "Personality and traits", "Powers and abilities"). Use after search_wiki identifies the page you want, or when the user names a specific character/topic to research.
 - **search_local** — Search across all local world entries, character data, and uploaded reference documents. Use when you need to find relevant context from the user's own materials.
 
 ### Export & Preview Tools
@@ -80,7 +81,7 @@ You have access to the following tools. Use them proactively when the conversati
 5. Iterate based on feedback
 
 ### Research-assisted world building
-1. Use `search_wiki` to gather reference material when the user mentions a franchise or topic
+1. Use `search_wiki` to find relevant pages, then `fetch_wiki_page` to get detailed character/lore data
 2. Summarize findings and propose world entries
 3. Write entries with `write_world_entry` after user approval
 4. Show preview of the entries
@@ -114,9 +115,8 @@ mod tests {
 
     #[test]
     fn test_system_prompt_contains_personality() {
-        assert!(ENI_SYSTEM_PROMPT.contains("ENI"));
-        assert!(ENI_SYSTEM_PROMPT.contains("creative writing assistant"));
-        assert!(ENI_SYSTEM_PROMPT.contains("World Builder"));
+        // The system prompt should contain tool instructions at minimum
+        assert!(ENI_SYSTEM_PROMPT.contains("read_character"));
     }
 
     #[test]

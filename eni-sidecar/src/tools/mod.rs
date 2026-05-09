@@ -5,6 +5,7 @@
 
 pub mod dispatcher;
 pub mod export_card;
+pub mod fetch_wiki_page;
 pub mod list_characters;
 pub mod persona;
 pub mod post_history;
@@ -20,6 +21,7 @@ pub mod write_character;
 
 pub use dispatcher::{Tool, ToolDispatcher, ToolResult, validate_against_schema};
 pub use export_card::ExportCardTool;
+pub use fetch_wiki_page::FetchWikiPageTool;
 pub use list_characters::ListCharactersTool;
 pub use persona::{ListPersonasTool, ReadPersonaTool, WritePersonaTool};
 pub use post_history::{ReadPostHistoryTool, WritePostHistoryTool};
