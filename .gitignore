@@ -5,6 +5,9 @@
 # Mockups (local design reference only)
 mockups/
 
+# Test prompts (local prompt development)
+test-prompts/
+
 # Reference repos (cloned for development reference only)
 reference-repos/
 

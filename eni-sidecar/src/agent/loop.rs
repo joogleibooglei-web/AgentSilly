@@ -15,6 +15,7 @@ use crate::config::AppConfig;
 use crate::context::{ContextBuilder, DocumentChunk};
 use crate::db::Database;
 use crate::llm::{ChatMessage, ChatToolCall, ChatFunctionCall, LlmResponse, LlmClient, TokenCallback};
+use crate::lorebook::Lorebook;
 use crate::tools::ToolDispatcher;
 
 use super::events::{AgentState, WsEvent};
@@ -37,6 +38,8 @@ pub struct AgentContext {
     pub db: Database,
     /// Relevant document chunks for context injection.
     pub relevant_chunks: Vec<DocumentChunk>,
+    /// Lorebook for keyword-triggered context injection.
+    pub lorebook: Lorebook,
 }
 
 /// Run a single agent turn: process a user message through the agent loop.
@@ -63,6 +66,21 @@ pub async fn run_turn(
 ) -> Result<()> {
     // Append user message to conversation
     ctx.conversation.push(ChatMessage::user(&user_message));
+
+    // Scan lorebook for keyword-triggered context injection
+    let recent_messages: Vec<&str> = ctx.conversation
+        .iter()
+        .filter(|m| m.role == "user" || m.role == "assistant")
+        .filter_map(|m| m.content.as_deref())
+        .collect();
+    let lorebook_chunks = ctx.lorebook.scan(&recent_messages, &user_message);
+    if !lorebook_chunks.is_empty() {
+        debug!(count = lorebook_chunks.len(), "Lorebook entries activated");
+        // Prepend lorebook chunks before any existing relevant_chunks
+        let mut combined = lorebook_chunks;
+        combined.extend(ctx.relevant_chunks.drain(..));
+        ctx.relevant_chunks = combined;
+    }
 
     // Notify frontend we're thinking
     let _ = tx.send(WsEvent::Status {
@@ -392,6 +410,7 @@ mod tests {
             config,
             db,
             relevant_chunks: Vec::new(),
+            lorebook: Lorebook::new(),
         };
 
         let result = run_turn(
@@ -454,6 +473,7 @@ mod tests {
             config,
             db,
             relevant_chunks: Vec::new(),
+            lorebook: Lorebook::new(),
         };
 
         let result = run_turn(

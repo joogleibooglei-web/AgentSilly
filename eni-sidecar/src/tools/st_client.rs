@@ -57,6 +57,24 @@ pub struct CharacterData {
     /// Avatar filename.
     #[serde(default)]
     pub avatar: String,
+    /// Alternate greetings (additional first messages the user can swap between).
+    #[serde(default)]
+    pub alternate_greetings: Vec<String>,
+    /// Embedded lorebook / character book (world info entries bundled with the card).
+    #[serde(default)]
+    pub character_book: Option<serde_json::Value>,
+    /// Freeform extension data (depth prompts, ST plugins, etc.).
+    #[serde(default)]
+    pub extensions: Option<serde_json::Value>,
+    /// Card creator attribution.
+    #[serde(default)]
+    pub creator: String,
+    /// Version string for the card.
+    #[serde(default)]
+    pub character_version: String,
+    /// Talkativeness (0.0–1.0) — how often the character initiates in group chats.
+    #[serde(default)]
+    pub talkativeness: Option<f64>,
 }
 
 /// Summary of a persona returned by the list endpoint.
@@ -125,32 +143,69 @@ impl StClient {
     }
 
     /// Auto-detect the SillyTavern URL by probing the configured URL and common ports.
+    ///
+    /// Detection strategy:
+    /// 1. Try the user-configured URL first (highest priority — user knows best)
+    /// 2. Probe common SillyTavern ports on localhost
+    /// 3. Probe common SillyTavern ports on 127.0.0.1 (in case localhost resolves to IPv6)
+    /// 4. Fall back to the configured URL (will fail gracefully on first real request)
+    ///
+    /// Each probe validates that the response is actually SillyTavern by checking
+    /// for the CSRF token endpoint's expected response shape.
     async fn detect_st_url(http: &reqwest::Client, configured_url: &str, api_key: Option<&str>) -> String {
-        // Try configured URL first
+        // Try configured URL first — always respect explicit user config
         if Self::probe_st(http, configured_url, api_key).await {
-            debug!(url = %configured_url, "SillyTavern found at configured URL");
+            info!(url = %configured_url, "SillyTavern found at configured URL");
             return configured_url.to_string();
         }
 
-        // Probe common SillyTavern ports
-        let common_ports = [8000, 8080, 8181, 8787, 8888];
-        for port in common_ports {
+        debug!(url = %configured_url, "SillyTavern not found at configured URL, scanning common ports...");
+
+        // Common SillyTavern ports in order of likelihood:
+        // 8000 — ST default
+        // 8080 — common alternative / Docker
+        // 8181 — ST alternative config
+        // 8787 — ST alternative config
+        // 8888 — ST alternative config
+        // 5000 — older ST versions / some Docker setups
+        // 5001 — ST with SSL on some setups
+        // 3000 — occasionally used in dev setups
+        let common_ports: &[u16] = &[8000, 8080, 8181, 8787, 8888, 5000, 5001, 3000];
+
+        // Probe localhost first (covers both IPv4 and IPv6 depending on OS resolution)
+        for &port in common_ports {
             let candidate = format!("http://localhost:{}", port);
             if candidate == configured_url {
                 continue; // Already tried
             }
             if Self::probe_st(http, &candidate, api_key).await {
-                info!(url = %candidate, "SillyTavern auto-detected");
+                info!(url = %candidate, "SillyTavern auto-detected on localhost");
                 return candidate;
             }
         }
 
-        // Fall back to configured URL
-        debug!("SillyTavern not detected on any common port, using configured URL");
+        // Probe 127.0.0.1 explicitly (in case localhost resolves to ::1 and ST only binds IPv4)
+        for &port in common_ports {
+            let candidate = format!("http://127.0.0.1:{}", port);
+            if candidate == configured_url {
+                continue;
+            }
+            if Self::probe_st(http, &candidate, api_key).await {
+                info!(url = %candidate, "SillyTavern auto-detected on 127.0.0.1");
+                return candidate;
+            }
+        }
+
+        // Fall back to configured URL — will fail gracefully on first real request
+        warn!("SillyTavern not detected on any common port. Using configured URL: {}", configured_url);
         configured_url.to_string()
     }
 
     /// Probe a URL to check if SillyTavern is running there.
+    ///
+    /// Validates the response is actually SillyTavern by checking that the
+    /// `/csrf-token` endpoint returns a JSON object with a `token` or `csrf` field,
+    /// or a non-empty text body (older ST versions return plain text tokens).
     async fn probe_st(http: &reqwest::Client, url: &str, api_key: Option<&str>) -> bool {
         let probe_url = format!("{}/csrf-token", url);
         let mut req = http.get(&probe_url).timeout(std::time::Duration::from_secs(2));
@@ -158,9 +213,64 @@ impl StClient {
             req = req.header("Authorization", format!("Bearer {key}"));
         }
         match req.send().await {
-            Ok(resp) => resp.status().is_success(),
+            Ok(resp) => {
+                if !resp.status().is_success() {
+                    return false;
+                }
+                // Validate this is actually SillyTavern by checking response body
+                match resp.text().await {
+                    Ok(body) => {
+                        // ST returns either {"token": "..."} or plain text token
+                        if body.is_empty() {
+                            return false;
+                        }
+                        // JSON response with token field = definitely ST
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&body) {
+                            return json.get("token").is_some() || json.get("csrf").is_some();
+                        }
+                        // Plain text response that looks like a token (non-empty, no HTML)
+                        let trimmed = body.trim();
+                        !trimmed.is_empty() && !trimmed.starts_with('<')
+                    }
+                    Err(_) => false,
+                }
+            }
             Err(_) => false,
         }
+    }
+
+    /// Attempt to reconnect to SillyTavern.
+    ///
+    /// Re-runs the detection logic and refreshes the CSRF token.
+    /// Call this when a request fails due to connection issues.
+    pub async fn reconnect(&mut self, config: &StConfig) -> Result<()> {
+        let configured_url = config.base_url.trim_end_matches('/').to_string();
+
+        info!("Attempting to reconnect to SillyTavern...");
+
+        let new_url = Self::detect_st_url(&self.http, &configured_url, config.api_key.as_deref()).await;
+
+        if new_url != self.base_url {
+            info!(old = %self.base_url, new = %new_url, "SillyTavern URL changed");
+        }
+
+        self.base_url = new_url;
+        self.api_key = config.api_key.clone();
+        self.csrf_token = None;
+
+        self.fetch_csrf_token().await?;
+        info!(url = %self.base_url, "Reconnected to SillyTavern");
+        Ok(())
+    }
+
+    /// Check if the client currently has a valid connection (CSRF token acquired).
+    pub fn is_connected(&self) -> bool {
+        self.csrf_token.is_some()
+    }
+
+    /// Get the currently detected base URL.
+    pub fn base_url(&self) -> &str {
+        &self.base_url
     }
 
     /// Fetch the CSRF token from SillyTavern's `/csrf-token` endpoint.
@@ -207,8 +317,25 @@ impl StClient {
     }
 
     /// Ensure we have a CSRF token, fetching one if needed.
+    ///
+    /// If the token is missing (either never acquired or invalidated after an error),
+    /// this re-runs detection to handle cases where ST started after the sidecar,
+    /// or moved to a different port.
     async fn ensure_csrf(&mut self) -> Result<()> {
         if self.csrf_token.is_none() {
+            // Re-detect ST URL in case it moved or just started
+            let current_url = self.base_url.clone();
+            let new_url = Self::detect_st_url(
+                &self.http,
+                &current_url,
+                self.api_key.as_deref(),
+            ).await;
+
+            if new_url != current_url {
+                info!(old = %current_url, new = %new_url, "SillyTavern URL updated during reconnect");
+                self.base_url = new_url;
+            }
+
             self.fetch_csrf_token().await.map_err(|e| {
                 anyhow::anyhow!(
                     "SillyTavern is not reachable at '{}'. \
@@ -246,9 +373,19 @@ impl StClient {
         req
     }
 
+    /// Invalidate the CSRF token, forcing re-detection on next request.
+    ///
+    /// Call this when a request fails due to connection issues so the next
+    /// `ensure_csrf()` call will re-probe for SillyTavern.
+    pub fn invalidate_connection(&mut self) {
+        debug!("Invalidating CSRF token — will re-detect ST on next request");
+        self.csrf_token = None;
+    }
+
     /// List all characters available in SillyTavern.
     ///
     /// Returns a summary for each character (name, avatar, last_modified).
+    /// On connection failure, invalidates the session so the next call re-detects ST.
     pub async fn get_characters(&mut self) -> Result<Vec<CharacterSummary>> {
         self.ensure_csrf().await?;
 
@@ -256,6 +393,7 @@ impl StClient {
         debug!(url = %url, "Fetching character list");
 
         let resp = self.get_request(&url).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -265,6 +403,10 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            // 403 often means CSRF token expired — invalidate so we re-fetch
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             anyhow::bail!(
                 "Failed to list characters: HTTP {} from {}",
                 resp.status(),
@@ -290,6 +432,7 @@ impl StClient {
         let body = serde_json::json!({ "name": name });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -299,6 +442,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             anyhow::bail!(
                 "Failed to get character '{}': HTTP {} from {}",
                 name,
@@ -322,6 +468,7 @@ impl StClient {
         debug!(url = %url, name = %data.name, "Creating character");
 
         let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -331,6 +478,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
@@ -353,6 +503,7 @@ impl StClient {
         debug!(url = %url, name = %data.name, "Editing character");
 
         let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -362,6 +513,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
@@ -386,6 +540,7 @@ impl StClient {
         let body = serde_json::json!({ "name": name });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -395,6 +550,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             let status = resp.status();
             let body_text = resp.text().await.unwrap_or_default();
             anyhow::bail!(
@@ -419,6 +577,7 @@ impl StClient {
         debug!(url = %url, "Fetching persona list");
 
         let resp = self.get_request(&url).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -428,6 +587,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             anyhow::bail!(
                 "Failed to list personas: HTTP {} from {}",
                 resp.status(),
@@ -453,6 +615,7 @@ impl StClient {
         let body = serde_json::json!({ "name": name });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -462,6 +625,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             anyhow::bail!(
                 "Failed to get persona '{}': HTTP {} from {}",
                 name,
@@ -485,6 +651,7 @@ impl StClient {
         debug!(url = %url, name = %data.name, "Editing persona");
 
         let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -494,6 +661,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
@@ -522,6 +692,7 @@ impl StClient {
         let body = serde_json::json!({ "name": name });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
+            self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
                  Please ensure SillyTavern is running and the base URL is correct.",
@@ -531,6 +702,9 @@ impl StClient {
         })?;
 
         if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
             let status = resp.status();
             let body_text = resp.text().await.unwrap_or_default();
             anyhow::bail!(

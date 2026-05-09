@@ -94,6 +94,31 @@ impl Tool for WriteCharacterTool {
                     "type": "array",
                     "items": { "type": "string" },
                     "description": "Tags for categorization"
+                },
+                "alternate_greetings": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Alternate first messages the user can swap between"
+                },
+                "character_book": {
+                    "type": "object",
+                    "description": "Embedded lorebook / character book"
+                },
+                "extensions": {
+                    "type": "object",
+                    "description": "Freeform extension data (depth prompts, ST plugins, etc.)"
+                },
+                "creator": {
+                    "type": "string",
+                    "description": "Card creator attribution"
+                },
+                "character_version": {
+                    "type": "string",
+                    "description": "Version string for the card"
+                },
+                "talkativeness": {
+                    "type": "number",
+                    "description": "0.0-1.0 scale for how often the character initiates in group chats"
                 }
             },
             "required": ["name"]
@@ -167,6 +192,38 @@ impl Tool for WriteCharacterTool {
                 .collect();
             updated.tags = tags;
             updated_fields.push("tags".to_string());
+        }
+        if let Some(alt_greetings_val) = args.get("alternate_greetings").and_then(|v| v.as_array()) {
+            let greetings: Vec<String> = alt_greetings_val
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect();
+            updated.alternate_greetings = greetings;
+            updated_fields.push("alternate_greetings".to_string());
+        }
+        if let Some(v) = args.get("character_book") {
+            if v.is_object() {
+                updated.character_book = Some(v.clone());
+                updated_fields.push("character_book".to_string());
+            }
+        }
+        if let Some(v) = args.get("extensions") {
+            if v.is_object() {
+                updated.extensions = Some(v.clone());
+                updated_fields.push("extensions".to_string());
+            }
+        }
+        if let Some(v) = args.get("creator").and_then(|v| v.as_str()) {
+            updated.creator = v.to_string();
+            updated_fields.push("creator".to_string());
+        }
+        if let Some(v) = args.get("character_version").and_then(|v| v.as_str()) {
+            updated.character_version = v.to_string();
+            updated_fields.push("character_version".to_string());
+        }
+        if let Some(v) = args.get("talkativeness").and_then(|v| v.as_f64()) {
+            updated.talkativeness = Some(v);
+            updated_fields.push("talkativeness".to_string());
         }
 
         if updated_fields.is_empty() {
@@ -282,6 +339,12 @@ mod tests {
             post_history_instructions: "".to_string(),
             tags: vec!["fantasy".to_string()],
             avatar: "kael.png".to_string(),
+            alternate_greetings: vec![],
+            character_book: None,
+            extensions: None,
+            creator: "".to_string(),
+            character_version: "".to_string(),
+            talkativeness: None,
         };
 
         let args = serde_json::json!({

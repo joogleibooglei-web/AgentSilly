@@ -206,6 +206,12 @@ mod tests {
             post_history_instructions: "".to_string(),
             tags: vec!["cyberpunk".to_string(), "warrior".to_string()],
             avatar: "kael.png".to_string(),
+            alternate_greetings: vec![],
+            character_book: None,
+            extensions: None,
+            creator: "".to_string(),
+            character_version: "".to_string(),
+            talkativeness: None,
         };
 
         let card = assemble_tavern_card_v2(&character);
