@@ -35,8 +35,18 @@ pub async fn health() -> Json<HealthResponse> {
 #[derive(Serialize)]
 pub struct ConfigResponse {
     pub model_profiles: Vec<ModelProfileInfo>,
+    pub active_profile: Option<ActiveProfileInfo>,
     pub post_card_prompt: Option<String>,
     pub st_base_url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ActiveProfileInfo {
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -95,7 +105,8 @@ pub async fn get_config(
             [],
             |row| row.get(0),
         )
-        .ok();
+        .ok()
+        .and_then(|v: String| serde_json::from_str::<String>(&v).ok().or(Some(v)));
 
     // Fetch ST base URL from config table
     let st_base_url: Option<String> = db
@@ -105,10 +116,44 @@ pub async fn get_config(
             [],
             |row| row.get(0),
         )
-        .ok();
+        .ok()
+        .and_then(|v: String| serde_json::from_str::<String>(&v).ok().or(Some(v)));
+
+    // Fetch user-configured model profile from config table
+    let get_config_value = |key: &str| -> Option<String> {
+        db.conn()
+            .query_row(
+                "SELECT value FROM config WHERE key = ?1",
+                rusqlite::params![key],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
+    };
+
+    let active_base_url = get_config_value("model_profile.baseUrl");
+    let active_api_key = get_config_value("model_profile.apiKey");
+    let active_model = get_config_value("model_profile.model");
+    let active_temperature = get_config_value("model_profile.temperature")
+        .and_then(|v| v.parse::<f64>().ok());
+    let active_max_tokens = get_config_value("model_profile.maxTokens")
+        .and_then(|v| v.parse::<u32>().ok());
+
+    let active_profile = if active_base_url.is_some() || active_api_key.is_some() || active_model.is_some() {
+        Some(ActiveProfileInfo {
+            base_url: active_base_url,
+            api_key: active_api_key,
+            model: active_model,
+            temperature: active_temperature,
+            max_tokens: active_max_tokens,
+        })
+    } else {
+        None
+    };
 
     Ok(Json(ConfigResponse {
         model_profiles: profiles,
+        active_profile,
         post_card_prompt,
         st_base_url,
     }))

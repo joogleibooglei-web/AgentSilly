@@ -216,6 +216,23 @@ export class WsClient {
         }));
         setModelProfiles(profiles);
       }
+
+      // If there's an active user-configured profile from the DB, use it
+      if (data.active_profile) {
+        const ap = data.active_profile;
+        const activeProfile: ModelProfile = {
+          id: 'user-configured',
+          name: 'User Configured',
+          baseUrl: ap.base_url || '',
+          apiKey: ap.api_key || '',
+          model: ap.model || '',
+          temperature: ap.temperature ?? 0.7,
+          maxTokens: ap.max_tokens ?? 4096,
+          isDefault: true,
+        };
+        setModelProfiles([activeProfile]);
+        setActiveModel('user-configured');
+      }
     } catch (e) {
       console.warn('[WsClient] Failed to fetch config from sidecar:', e);
     }

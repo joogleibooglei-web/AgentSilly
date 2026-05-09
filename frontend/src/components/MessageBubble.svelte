@@ -1,11 +1,12 @@
 <script lang="ts">
-  import type { Message } from '../lib/stores/conversation';
+  import { deleteMessage, type Message } from '../lib/stores/conversation';
 
   interface Props {
     message: Message;
   }
 
   let { message }: Props = $props();
+  let showActions = $state(false);
 
   /**
    * Simple markdown rendering: bold, italic, inline code, code blocks, lists.
@@ -45,15 +46,30 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
   }
+
+  function handleDelete(): void {
+    deleteMessage(message.id);
+  }
 </script>
 
-<div class="message" class:user={message.role === 'user'} class:assistant={message.role === 'assistant'} class:system={message.role === 'system'}>
+<div
+  class="message"
+  class:user={message.role === 'user'}
+  class:assistant={message.role === 'assistant'}
+  class:system={message.role === 'system'}
+  onmouseenter={() => showActions = true}
+  onmouseleave={() => showActions = false}
+  role="group"
+>
   <div class="msg-bubble">
     {#if message.role === 'system'}
       <span class="system-label">System</span>
     {/if}
     {@html renderMarkdown(message.content)}
   </div>
+  {#if showActions && message.role !== 'system'}
+    <button class="delete-btn" onclick={handleDelete} aria-label="Delete message">✕</button>
+  {/if}
 </div>
 
 <style>
@@ -62,6 +78,7 @@
     flex-direction: column;
     max-width: 90%;
     animation: fadeIn 200ms ease;
+    position: relative;
   }
 
   .message.user {
@@ -75,6 +92,32 @@
   .message.system {
     align-self: center;
     max-width: 80%;
+  }
+
+  .delete-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 9px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 120ms;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .delete-btn:hover {
+    color: var(--error);
+    border-color: var(--error);
+    background: rgba(244, 67, 54, 0.1);
   }
 
   .msg-bubble {

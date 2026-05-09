@@ -165,6 +165,13 @@ export function clearConversation(): void {
   conversation.set(initialState);
 }
 
+export function deleteMessage(id: string): void {
+  conversation.update((s) => ({
+    ...s,
+    messages: s.messages.filter((m) => m.id !== id),
+  }));
+}
+
 export function setMessages(msgs: Message[]): void {
   conversation.update((s) => ({ ...s, messages: msgs }));
 }

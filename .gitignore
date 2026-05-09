@@ -19,6 +19,10 @@ eni-sidecar/*.db
 eni-sidecar/*.db-shm
 eni-sidecar/*.db-wal
 eni-sidecar/search_index/
+*.db
+*.db-shm
+*.db-wal
+search_index/
 
 # Frontend dev dependencies
 frontend/node_modules/

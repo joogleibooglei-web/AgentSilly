@@ -227,9 +227,16 @@ pub async fn run_turn(
                 }).await;
             }
             Err(e) => {
-                error!(error = %e, "LLM API call failed");
+                // Include the full error chain for debugging
+                let root_cause = e.root_cause().to_string();
+                let err_display = if root_cause != e.to_string() {
+                    format!("{}: {}", e, root_cause)
+                } else {
+                    e.to_string()
+                };
+                error!(error = %err_display, "LLM API call failed");
                 let _ = tx.send(WsEvent::Error {
-                    message: format!("LLM API error: {}", e),
+                    message: format!("LLM API error: {}", err_display),
                 }).await;
                 let _ = tx.send(WsEvent::Status {
                     state: AgentState::Idle,

@@ -57,6 +57,16 @@
     ws.send({ type: 'test_connection' } as any);
   }
 
+  function handleConnect(): void {
+    const ws = getWsClient();
+    ws.connect();
+  }
+
+  function handleDisconnect(): void {
+    const ws = getWsClient();
+    ws.disconnect();
+  }
+
   function handlePostCardBlur(): void {
     sendConfigUpdate('postCardPrompt', postCardPrompt);
   }
@@ -127,6 +137,11 @@
       <div class="status-row">
         <span class="status-dot" style="background: {getStatusColor(connectionState)}"></span>
         <span class="status-text">{getStatusLabel(connectionState)}</span>
+        {#if connectionState === 'disconnected' || connectionState === 'setup_required'}
+          <button class="connect-btn" onclick={handleConnect}>Connect</button>
+        {:else if connectionState === 'connected'}
+          <button class="disconnect-btn" onclick={handleDisconnect}>Disconnect</button>
+        {/if}
       </div>
     </div>
 
@@ -281,6 +296,44 @@
   .status-text {
     font-size: 12px;
     color: var(--text-secondary);
+  }
+
+  .connect-btn {
+    margin-left: auto;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    background: rgba(232, 163, 61, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 120ms;
+    font-family: inherit;
+  }
+
+  .connect-btn:hover {
+    background: rgba(232, 163, 61, 0.2);
+  }
+
+  .disconnect-btn {
+    margin-left: auto;
+    padding: 5px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 120ms;
+    font-family: inherit;
+  }
+
+  .disconnect-btn:hover {
+    color: var(--error);
+    border-color: var(--error);
+    background: rgba(244, 67, 54, 0.08);
   }
 
   .form-group {
@@ -446,8 +499,8 @@
     padding: 7px 14px;
     font-size: 11px;
     font-weight: 500;
-    color: var(--text);
-    background: rgba(124, 92, 252, 0.15);
+    color: var(--accent);
+    background: rgba(232, 163, 61, 0.1);
     border: 1px solid var(--accent);
     border-radius: 4px;
     cursor: pointer;
@@ -455,7 +508,7 @@
   }
 
   .test-btn:hover {
-    background: rgba(124, 92, 252, 0.3);
+    background: rgba(232, 163, 61, 0.2);
   }
 
 

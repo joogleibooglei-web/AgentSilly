@@ -108,7 +108,7 @@ impl LlmClient {
             .json(&body)
             .send()
             .await
-            .context("Failed to send chat completion request")?;
+            .with_context(|| format!("Failed to send chat completion request to {}", url))?;
 
         // Check for HTTP errors
         let status = response.status();
