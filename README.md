@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/SillyTavern-Server%20Plugin-blueviolet?style=for-the-badge" alt="SillyTavern Server Plugin" />
-  <img src="https://img.shields.io/badge/version-0.2.0-blue?style=for-the-badge" alt="Version 0.2.0" />
+  <img src="https://img.shields.io/badge/version-0.4.1-blue?style=for-the-badge" alt="Version 0.4.1" />
   <img src="https://img.shields.io/badge/rust-sidecar-orange?style=for-the-badge&logo=rust" alt="Rust Sidecar" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT License" />
 </p>
@@ -67,12 +67,30 @@ Then restart SillyTavern. On first launch the plugin automatically downloads the
 ## ✨ Features
 
 - 🤖 **AI-Powered Agent** — Intelligent assistant that helps you create, edit, and manage world building content
-- 📚 **Character Management** — Create, read, and export character cards with full V2 spec support
+- 📚 **Character Management** — Create, read, and export character cards with full TavernCard V2 spec support (including alternate greetings, character books, extensions, talkativeness)
+- 👤 **Persona Support** — Create and edit user personas with dedicated formatting rules
 - 🌐 **World Entries** — Manage lorebook entries with semantic search and intelligent suggestions
+- 📖 **Lorebook-Style Prompt Extensions** — Keyword-triggered context injection that loads formatting instructions on-demand (character cards, personas, world info, post-history blocks)
 - 🔍 **Semantic Search** — Find relevant lore and characters using natural language queries
 - ⚡ **Rust Sidecar** — High-performance backend for fast search indexing and AI inference
+- 🔄 **Auto-Connect** — Automatically detects SillyTavern on any common port (8000, 8080, 8181, 8787, 8888, 5000, 5001, 3000) with self-healing reconnection
 - 🔄 **Auto-Updates** — Sidecar binary updates automatically from GitHub Releases
 - 💥 **Crash Recovery** — Automatic restart with rate limiting if the sidecar goes down
+
+---
+
+## 🔌 Connection Architecture
+
+The plugin manages two separate connections:
+
+| Connection | Protocol | Purpose |
+|-----------|----------|---------|
+| **Sidecar** | WebSocket (port 7842) | Frontend ↔ Rust agent (chat, tools, streaming) |
+| **SillyTavern Server** | HTTP REST | Sidecar ↔ ST API (character CRUD, personas, exports) |
+
+The SillyTavern URL is auto-detected from the browser context (`window.location.origin`) and reported to the sidecar on connect. You can also set it manually in Settings → SillyTavern Server.
+
+If ST restarts or moves ports, the sidecar automatically re-detects it on the next request.
 
 ---
 
@@ -94,6 +112,30 @@ Create a `config.json` in the plugin directory to customize behavior:
 | `autoUpdate` | boolean | `true` | Automatically check for and download sidecar updates |
 | `dataRoot` | string \| null | `null` | Override ST data root path (auto-detected if null) |
 
+### Sidecar Configuration
+
+The sidecar reads `~/.config/eni-sidecar/config.toml`:
+
+```toml
+listen_port = 7842
+http_port = 7843
+
+[sillytavern]
+base_url = "http://localhost:8000"
+# api_key = "your-st-api-key"  # if ST auth is enabled
+
+[[models]]
+name = "default"
+base_url = "https://api.openai.com/v1"
+api_key = "sk-..."
+model = "gpt-4o"
+temperature = 0.7
+max_tokens = 4096
+is_default = true
+```
+
+> **Note:** The ST URL in the TOML is a fallback. The frontend auto-reports the correct URL on connect, which takes priority.
+
 ---
 
 ## 🔌 API
@@ -110,8 +152,8 @@ The plugin registers routes on the SillyTavern plugin router:
 ```json
 {
   "sidecar_running": true,
-  "sidecar_version": "0.2.0",
-  "plugin_version": "0.2.0"
+  "sidecar_version": "0.4.1",
+  "plugin_version": "0.4.1"
 }
 ```
 
@@ -135,6 +177,13 @@ plugins/eni-world-builder/
 │   └── routes.js         ← API route registration
 ├── frontend/             ← Svelte source (dev only)
 └── eni-sidecar/          ← Rust sidecar source (dev only)
+    └── src/
+        ├── agent/        ← Agent loop (LLM call → tool exec → stream)
+        ├── context/      ← Prompt assembly & token budgeting
+        ├── lorebook/     ← Keyword-triggered prompt extensions
+        ├── llm/          ← OpenAI-compatible LLM client
+        ├── tools/        ← Tool implementations (ST client, search, etc.)
+        └── ws/           ← WebSocket server & message dispatch
 ```
 
 ### How It Works
@@ -144,10 +193,19 @@ SillyTavern starts
   └─ Loads plugin, calls init(router)
        ├─ Downloads/updates sidecar binary from GitHub
        ├─ Spawns sidecar process on configured port
-       ├─ Monitors health endpoint (http://127.0.0.1:7842/health)
+       ├─ Monitors health endpoint (http://127.0.0.1:7843/health)
        ├─ Enables crash recovery (max 5 restarts per 60s)
        ├─ Copies UI extension to ST extensions directory
        └─ Registers /status and /restart API routes
+
+Frontend connects to sidecar (WebSocket)
+  └─ Reports ST URL (window.location.origin)
+       └─ Sidecar stores URL, uses it for all ST API calls
+
+User sends message
+  └─ Lorebook scans for keywords (last 3 messages)
+       ├─ Matches? → Injects formatting instructions into context
+       └─ Agent loop: LLM call → tool execution → stream response
 
 SillyTavern shuts down
   └─ Calls exit()
@@ -184,21 +242,7 @@ npm run build   # Production build → dist/
 ```bash
 cd eni-sidecar
 cargo build --release
-```
-
-### Running Tests
-
-```bash
-# All tests
-node lib/binary.test.js
-node lib/binary.platform.test.js
-node lib/binary.version.test.js
-node lib/config.test.js
-node lib/sidecar.test.js
-node lib/sidecar.ratelimit.test.js
-node lib/ui-installer.test.js
-node --test lib/routes.test.js
-node lib/lifecycle.test.js
+cargo test      # Run all 146 tests
 ```
 
 ---
