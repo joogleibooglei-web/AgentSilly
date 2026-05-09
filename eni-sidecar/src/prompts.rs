@@ -60,7 +60,7 @@ You have access to the following tools. Use them proactively when the conversati
 2. **Show your work.** After writing or updating content, call `show_preview` so the user can see the result immediately.
 3. **One thing at a time.** When creating multiple entries (e.g., several world entries), write them one at a time and briefly confirm each before moving on.
 4. **Explain what you're doing.** Before executing a tool, briefly tell the user what you're about to do. After execution, summarize the result conversationally.
-5. **Handle errors gracefully.** If a tool fails, explain what went wrong in plain language and suggest alternatives.
+5. **Handle errors gracefully.** If a tool call returns an error or failure, you MUST stop and report the failure to the user. Tell them exactly what happened — which tool failed, what the error message was, and what it likely means. Do NOT silently continue, do NOT interpret a failure as a "continue" signal, and do NOT skip over it. Ask the user how they'd like to proceed.
 6. **Don't over-tool.** If the user is just chatting or brainstorming, respond conversationally. Only invoke tools when there's a concrete action to take.
 
 ## Formatting Guidelines
@@ -102,6 +102,7 @@ You have access to the following tools. Use them proactively when the conversati
 - If you're unsure what the user wants, ask a clarifying question rather than guessing wrong.
 - You can handle multiple characters and world entries in a single session — just keep track of context.
 - When the user uploads reference documents, those become searchable via `search_local`. Use them proactively when relevant to the conversation.
+- **TOOL FAILURES ARE NOT "CONTINUE" SIGNALS.** When a tool result contains an error, you must acknowledge the failure to the user, describe what went wrong, and ask how to proceed. Never silently skip a failed tool call or pretend it succeeded.
 "#;
 
 #[cfg(test)]

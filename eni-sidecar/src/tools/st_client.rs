@@ -23,42 +23,46 @@ pub struct CharacterSummary {
 }
 
 /// Full character card data (TavernCard V2 fields).
+///
+/// Uses permissive deserialization to handle cards with missing, null, or
+/// differently-typed fields. SillyTavern cards vary widely in format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CharacterData {
     /// Character name (required).
+    #[serde(default)]
     pub name: String,
     /// Character description / backstory.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub description: String,
     /// Personality summary.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub personality: String,
     /// Scenario / setting context.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub scenario: String,
     /// First message the character sends.
-    #[serde(default)]
+    #[serde(default, alias = "first_message", alias = "greeting", deserialize_with = "deserialize_string_permissive")]
     pub first_mes: String,
     /// Example dialogue (mes_example).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub mes_example: String,
     /// Creator notes (metadata).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub creator_notes: String,
     /// System prompt override for this character.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub system_prompt: String,
     /// Post-history instructions for this character.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub post_history_instructions: String,
     /// Tags for categorization.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_vec_string_permissive")]
     pub tags: Vec<String>,
     /// Avatar filename.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub avatar: String,
     /// Alternate greetings (additional first messages the user can swap between).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_vec_string_permissive")]
     pub alternate_greetings: Vec<String>,
     /// Embedded lorebook / character book (world info entries bundled with the card).
     #[serde(default)]
@@ -67,14 +71,66 @@ pub struct CharacterData {
     #[serde(default)]
     pub extensions: Option<serde_json::Value>,
     /// Card creator attribution.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub creator: String,
     /// Version string for the card.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_permissive")]
     pub character_version: String,
     /// Talkativeness (0.0–1.0) — how often the character initiates in group chats.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_option_f64_permissive")]
     pub talkativeness: Option<f64>,
+}
+
+/// Permissive string deserializer: handles null, numbers, booleans, and missing values.
+fn deserialize_string_permissive<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(String::new()),
+        Some(serde_json::Value::String(s)) => Ok(s),
+        Some(serde_json::Value::Number(n)) => Ok(n.to_string()),
+        Some(serde_json::Value::Bool(b)) => Ok(b.to_string()),
+        Some(other) => Ok(other.to_string()),
+    }
+}
+
+/// Permissive Vec<String> deserializer: handles null, non-array values gracefully.
+fn deserialize_vec_string_permissive<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(Vec::new()),
+        Some(serde_json::Value::Array(arr)) => {
+            Ok(arr.into_iter().filter_map(|v| match v {
+                serde_json::Value::String(s) => Some(s),
+                serde_json::Value::Null => None,
+                other => Some(other.to_string()),
+            }).collect())
+        }
+        Some(serde_json::Value::String(s)) => {
+            // Single string — wrap in a vec
+            if s.is_empty() { Ok(Vec::new()) } else { Ok(vec![s]) }
+        }
+        Some(_) => Ok(Vec::new()),
+    }
+}
+
+/// Permissive Option<f64> deserializer: handles string numbers, null, etc.
+fn deserialize_option_f64_permissive<'de, D>(deserializer: D) -> std::result::Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value: Option<serde_json::Value> = Option::deserialize(deserializer)?;
+    match value {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::Number(n)) => Ok(n.as_f64()),
+        Some(serde_json::Value::String(s)) => Ok(s.parse::<f64>().ok()),
+        Some(_) => Ok(None),
+    }
 }
 
 /// Summary of a persona returned by the list endpoint.

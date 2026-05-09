@@ -30,7 +30,7 @@ import {
   setUndoAvailable,
   type RightPaneTab,
 } from '../stores/ui';
-import { setActiveModel, setModelProfiles, updateConfig, type ModelProfile } from '../stores/config';
+import { setActiveModel, setModelProfiles, setStBaseUrl, updateConfig, type ModelProfile } from '../stores/config';
 
 // --- Protocol Types ---
 
@@ -233,6 +233,11 @@ export class WsClient {
         };
         setModelProfiles([activeProfile]);
         setActiveModel('user-configured');
+      }
+
+      // Store the SillyTavern base URL for avatar image loading
+      if (data.st_base_url) {
+        setStBaseUrl(data.st_base_url);
       }
     } catch (e) {
       console.warn('[WsClient] Failed to fetch config from sidecar:', e);

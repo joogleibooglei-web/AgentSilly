@@ -20,12 +20,14 @@ export interface ConfigStore {
   modelProfiles: ModelProfile[];
   activeModelId: string | null;
   postCardPrompt: string;
+  stBaseUrl: string;
 }
 
 const initialState: ConfigStore = {
   modelProfiles: [],
   activeModelId: null,
   postCardPrompt: '',
+  stBaseUrl: 'http://localhost:8000',
 };
 
 export const config = writable<ConfigStore>(initialState);
@@ -49,6 +51,10 @@ export function setActiveModel(profileId: string): void {
 
 export function setPostCardPrompt(prompt: string): void {
   config.update((s) => ({ ...s, postCardPrompt: prompt }));
+}
+
+export function setStBaseUrl(url: string): void {
+  config.update((s) => ({ ...s, stBaseUrl: url }));
 }
 
 export function updateConfig(key: string, value: unknown): void {
