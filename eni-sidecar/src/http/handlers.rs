@@ -13,8 +13,8 @@ use super::HttpState;
 
 // ─── Health ──────────────────────────────────────────────────────────────────
 
-/// Sidecar version (from Cargo.toml).
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Sidecar version (from git tag via build.rs, falls back to CARGO_PKG_VERSION).
+const VERSION: &str = env!("ENI_VERSION");
 
 #[derive(Serialize)]
 pub struct HealthResponse {
