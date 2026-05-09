@@ -1,7 +1,8 @@
-//! Tool: search_wiki — queries a fandom wiki and returns structured results.
+//! Tool: search_wiki — queries any MediaWiki-compatible wiki and returns structured results.
 //!
-//! Performs an HTTP GET to a configurable wiki search API (defaults to fandom wiki),
-//! parses the results, and returns structured summaries with title, snippet, and URL.
+//! Performs an HTTP GET to a configurable wiki search API (supports Fandom, wiki.gg,
+//! and any other MediaWiki-based wiki), parses the results, and returns structured
+//! summaries with title, snippet, and URL.
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,20 +11,51 @@ use tracing::debug;
 
 use super::dispatcher::{validate_against_schema, Tool};
 
-/// Tool that searches a fandom wiki (or configurable wiki URL) and returns
-/// structured results with title, snippet, and URL.
+/// Well-known wiki registries that can be referenced by short name.
+/// The agent can use these instead of providing a full URL.
+const KNOWN_WIKIS: &[(&str, &str)] = &[
+    ("starwars", "https://starwars.fandom.com"),
+    ("lotr", "https://lotr.fandom.com"),
+    ("cyberpunk", "https://cyberpunk.fandom.com"),
+    ("rejuvenation", "https://rejuvenation.wiki.gg"),
+    ("pokemon", "https://pokemon.wiki.gg"),
+    ("terraria", "https://terraria.wiki.gg"),
+    ("minecraft", "https://minecraft.wiki.gg"),
+    ("zelda", "https://zelda.wiki.gg"),
+    ("hollowknight", "https://hollowknight.wiki.gg"),
+    ("genshin", "https://genshin-impact.fandom.com"),
+    ("dnd", "https://forgottenrealms.fandom.com"),
+    ("wookieepedia", "https://starwars.fandom.com"),
+    ("memory-alpha", "https://memory-alpha.fandom.com"),
+];
+
+/// Resolve a wiki identifier to a base URL.
+/// Accepts either a known short name or a full URL.
+fn resolve_wiki_url(input: &str) -> String {
+    // Check if it's a known short name
+    if let Some((_name, url)) = KNOWN_WIKIS.iter().find(|(name, _)| {
+        name.eq_ignore_ascii_case(input)
+    }) {
+        return url.to_string();
+    }
+
+    // Otherwise treat it as a direct URL
+    input.trim_end_matches('/').to_string()
+}
+
+/// Tool that searches any MediaWiki-compatible wiki (Fandom, wiki.gg, etc.)
+/// and returns structured results with title, snippet, and URL.
 pub struct SearchWikiTool {
     http: reqwest::Client,
-    /// Base URL for the wiki API. Defaults to a fandom wiki search endpoint.
-    /// Expected format: "https://<wiki>.fandom.com" (the /api.php path is appended).
+    /// Default wiki base URL used when no override is provided.
     wiki_base_url: String,
 }
 
 impl SearchWikiTool {
-    /// Create a new `SearchWikiTool` with a configurable wiki base URL.
+    /// Create a new `SearchWikiTool` with a configurable default wiki base URL.
     ///
-    /// If `wiki_base_url` is `None`, defaults to a generic fandom wiki URL.
-    /// The user can configure this to point at any MediaWiki-compatible API.
+    /// If `wiki_base_url` is `None`, defaults to the cyberpunk fandom wiki.
+    /// The user can override per-call via the `wiki_url` parameter.
     pub fn new(wiki_base_url: Option<String>) -> Self {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
@@ -38,6 +70,11 @@ impl SearchWikiTool {
             wiki_base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
+
+    /// Returns the list of known wiki short names for discoverability.
+    pub fn known_wikis() -> Vec<(&'static str, &'static str)> {
+        KNOWN_WIKIS.iter().copied().collect()
+    }
 }
 
 #[async_trait]
@@ -47,7 +84,7 @@ impl Tool for SearchWikiTool {
     }
 
     fn description(&self) -> &str {
-        "Search a fandom wiki for information. Returns titles, snippets, and URLs for matching articles."
+        "Search any MediaWiki-compatible wiki (Fandom, wiki.gg, or custom) for information. Returns titles, snippets, and URLs for matching articles. Supports known wiki short names (e.g., 'rejuvenation', 'starwars', 'terraria') or full URLs."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -65,7 +102,7 @@ impl Tool for SearchWikiTool {
                 },
                 "wiki_url": {
                     "type": "string",
-                    "description": "Optional override for the wiki base URL (e.g., 'https://lotr.fandom.com')"
+                    "description": "Wiki to search. Can be a known short name (e.g., 'rejuvenation', 'starwars', 'terraria', 'minecraft', 'zelda', 'lotr', 'dnd') or a full URL (e.g., 'https://rejuvenation.wiki.gg', 'https://lotr.fandom.com'). If omitted, uses the default wiki."
                 }
             },
             "required": ["query"]
@@ -87,16 +124,16 @@ impl Tool for SearchWikiTool {
             .unwrap_or(5)
             .min(20) as usize;
 
-        // Allow per-call wiki URL override
+        // Resolve wiki URL — supports short names and full URLs
         let base_url = args
             .get("wiki_url")
             .and_then(|v| v.as_str())
-            .map(|s| s.trim_end_matches('/').to_string())
+            .map(resolve_wiki_url)
             .unwrap_or_else(|| self.wiki_base_url.clone());
 
         debug!(query = %query, limit = limit, wiki = %base_url, "Searching wiki");
 
-        // Use MediaWiki API opensearch endpoint
+        // Use MediaWiki API search endpoint
         let api_url = format!("{}/api.php", base_url);
 
         let resp = self
@@ -187,12 +224,19 @@ mod tests {
         let valid_limit = serde_json::json!({"query": "dragon", "limit": 10});
         assert!(tool.validate_args(&valid_limit).is_ok());
 
-        // Valid: with wiki_url override
+        // Valid: with wiki_url override (full URL)
         let valid_url = serde_json::json!({
             "query": "elf",
             "wiki_url": "https://lotr.fandom.com"
         });
         assert!(tool.validate_args(&valid_url).is_ok());
+
+        // Valid: with wiki_url override (short name)
+        let valid_short = serde_json::json!({
+            "query": "Nim",
+            "wiki_url": "rejuvenation"
+        });
+        assert!(tool.validate_args(&valid_short).is_ok());
 
         // Invalid: missing query
         let invalid = serde_json::json!({"limit": 5});
@@ -209,5 +253,30 @@ mod tests {
     fn test_custom_wiki_url() {
         let tool = SearchWikiTool::new(Some("https://lotr.fandom.com/".to_string()));
         assert_eq!(tool.wiki_base_url, "https://lotr.fandom.com");
+    }
+
+    #[test]
+    fn test_resolve_wiki_url_short_name() {
+        assert_eq!(resolve_wiki_url("rejuvenation"), "https://rejuvenation.wiki.gg");
+        assert_eq!(resolve_wiki_url("starwars"), "https://starwars.fandom.com");
+        assert_eq!(resolve_wiki_url("terraria"), "https://terraria.wiki.gg");
+    }
+
+    #[test]
+    fn test_resolve_wiki_url_case_insensitive() {
+        assert_eq!(resolve_wiki_url("Rejuvenation"), "https://rejuvenation.wiki.gg");
+        assert_eq!(resolve_wiki_url("STARWARS"), "https://starwars.fandom.com");
+    }
+
+    #[test]
+    fn test_resolve_wiki_url_full_url() {
+        assert_eq!(
+            resolve_wiki_url("https://custom.wiki.gg/"),
+            "https://custom.wiki.gg"
+        );
+        assert_eq!(
+            resolve_wiki_url("https://mywiki.fandom.com"),
+            "https://mywiki.fandom.com"
+        );
     }
 }

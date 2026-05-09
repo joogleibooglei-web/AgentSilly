@@ -18,6 +18,13 @@ mod ws;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Handle --version flag before anything else
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--version" || a == "-V") {
+        println!("eni-sidecar {}", env!("ENI_VERSION"));
+        return Ok(());
+    }
+
     // Initialize tracing subscriber for structured logging
     tracing_subscriber::fmt()
         .with_env_filter(

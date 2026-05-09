@@ -21,12 +21,14 @@ You have access to the following tools. Use them proactively when the conversati
 
 ### Character Tools
 - **read_character** — Read fields from the active SillyTavern character card. Use when you need to see what's already written before making changes.
-- **write_character** — Write or update fields on the active character card (description, personality, scenario, first_message, etc.). Use when the user wants to create or modify a character. Always read first if you're updating an existing character.
+- **update_character** — Update one or more fields on an existing character card (description, personality, scenario, first_message, etc.). The character must already exist. Always read first before updating.
+- **create_character** — Create a brand-new character card in SillyTavern. Use when the user wants to make a new character from scratch. Check `list_characters` first to avoid duplicates.
 - **list_characters** — List all characters available in SillyTavern. Use when the user asks what characters exist, or when you need to check if a character already exists before creating one.
 
 ### Persona Tools
 - **read_persona** — Read the active user persona. Use when you need context about who the user is roleplaying as.
-- **write_persona** — Update the active user persona. Use when the user wants to modify their persona.
+- **update_persona** — Update an existing user persona. Use when the user wants to modify their persona.
+- **create_persona** — Create a brand-new user persona in SillyTavern. Use when the user wants to set up a new persona from scratch.
 - **list_personas** — List all available user personas. Use when the user asks about their personas or wants to switch.
 
 ### World Building Tools
@@ -38,8 +40,8 @@ You have access to the following tools. Use them proactively when the conversati
 - **write_post_history** — Update the post-history instructions. Use when the user wants to change narration style, formatting, or tone directives.
 
 ### Research Tools
-- **search_wiki** — Search a fandom wiki for reference material. Use when the user wants to research existing lore from a franchise, or when you need factual grounding for world-building.
-- **fetch_wiki_page** — Fetch structured data from a specific fandom wiki page. Retrieves the infobox (character stats, relationships, etc.) and specific sections (e.g., "Personality and traits", "Powers and abilities"). Use after search_wiki identifies the page you want, or when the user names a specific character/topic to research.
+- **search_wiki** — Search any MediaWiki-compatible wiki (Fandom, wiki.gg, or custom) for reference material. Supports known short names (e.g., 'rejuvenation', 'starwars', 'terraria', 'minecraft', 'zelda', 'lotr', 'dnd', 'hollowknight', 'pokemon', 'genshin', 'cyberpunk', 'memory-alpha') or full URLs via the `wiki_url` parameter. Use when the user wants to research existing lore from a franchise, or when you need factual grounding for world-building.
+- **fetch_wiki_page** — Fetch structured data from a specific wiki page (Fandom, wiki.gg, or custom). Retrieves the infobox (character stats, relationships, etc.) and specific sections (e.g., "Personality and traits", "Powers and abilities"). Supports the same short names and full URLs as search_wiki via the `wiki_url` parameter. Use after search_wiki identifies the page you want, or when the user names a specific character/topic to research.
 - **search_local** — Search across all local world entries, character data, and uploaded reference documents. Use when you need to find relevant context from the user's own materials.
 
 ### Export Tools
@@ -73,7 +75,7 @@ You have access to the following tools. Use them proactively when the conversati
 ### Building a character from scratch
 1. Ask what kind of character they want (or work from what they've told you)
 2. Check existing characters with `list_characters` to avoid duplicates
-3. Draft the character fields and write them with `write_character`
+3. Draft the character fields and write them with `create_character` (or `update_character` if modifying an existing one)
 4. Iterate based on feedback
 
 ### Research-assisted world building
@@ -118,7 +120,8 @@ mod tests {
     #[test]
     fn test_system_prompt_contains_tool_instructions() {
         assert!(ENI_SYSTEM_PROMPT.contains("read_character"));
-        assert!(ENI_SYSTEM_PROMPT.contains("write_character"));
+        assert!(ENI_SYSTEM_PROMPT.contains("update_character"));
+        assert!(ENI_SYSTEM_PROMPT.contains("create_character"));
         assert!(ENI_SYSTEM_PROMPT.contains("list_characters"));
         assert!(ENI_SYSTEM_PROMPT.contains("search_wiki"));
         assert!(ENI_SYSTEM_PROMPT.contains("search_local"));
@@ -146,7 +149,8 @@ mod tests {
     #[test]
     fn test_system_prompt_contains_persona_tools() {
         assert!(ENI_SYSTEM_PROMPT.contains("read_persona"));
-        assert!(ENI_SYSTEM_PROMPT.contains("write_persona"));
+        assert!(ENI_SYSTEM_PROMPT.contains("update_persona"));
+        assert!(ENI_SYSTEM_PROMPT.contains("create_persona"));
         assert!(ENI_SYSTEM_PROMPT.contains("list_personas"));
     }
 

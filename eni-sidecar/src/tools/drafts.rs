@@ -301,7 +301,7 @@ impl Tool for FinalizeWorldInfoTool {
             "World info finalized and draft deleted"
         );
 
-        // 7. Send Preview event with null data to clear the preview pane
+        // 7. Send Preview event with null data to clear the draft preview pane
         let _ = self
             .event_tx
             .send(WsEvent::Preview {
@@ -310,7 +310,21 @@ impl Tool for FinalizeWorldInfoTool {
             })
             .await;
 
-        // 8. Return success response
+        // 8. Re-read the updated character and send character preview to frontend
+        let updated_character = {
+            let mut client = self.st_client.lock().await;
+            client.get_character(&avatar_url).await?
+        };
+        let updated_data = serde_json::to_value(&updated_character)?;
+        let _ = self
+            .event_tx
+            .send(WsEvent::Preview {
+                tab: "character".to_string(),
+                data: updated_data,
+            })
+            .await;
+
+        // 9. Return success response
         Ok(serde_json::json!({
             "success": true,
             "character": avatar_url,
@@ -593,7 +607,7 @@ impl Tool for FinalizePostHistoryTool {
             "Post-history finalized and draft deleted"
         );
 
-        // 5. Send Preview event with null data to clear the preview pane
+        // 5. Send Preview event with null data to clear the draft preview pane
         let _ = self
             .event_tx
             .send(WsEvent::Preview {
@@ -602,7 +616,21 @@ impl Tool for FinalizePostHistoryTool {
             })
             .await;
 
-        // 6. Return success response
+        // 6. Re-read the updated character and send character preview to frontend
+        let updated_character = {
+            let mut client = self.st_client.lock().await;
+            client.get_character(&avatar_url).await?
+        };
+        let updated_data = serde_json::to_value(&updated_character)?;
+        let _ = self
+            .event_tx
+            .send(WsEvent::Preview {
+                tab: "character".to_string(),
+                data: updated_data,
+            })
+            .await;
+
+        // 7. Return success response
         Ok(serde_json::json!({
             "success": true,
             "character": avatar_url,

@@ -1,6 +1,9 @@
-//! Tool: write_character — writes one or more fields to a character card in SillyTavern.
+//! Tools: update_character and create_character — manage character cards in SillyTavern.
 //!
-//! Snapshots the previous state via VersionStore before writing, and sends
+//! `update_character` updates fields on an existing character card.
+//! `create_character` creates a brand-new character card from scratch.
+//!
+//! Both snapshot the previous state via VersionStore before writing, and send
 //! an `UndoAvailable` event to the frontend after a successful write.
 
 use std::sync::Arc;
@@ -11,24 +14,26 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 
 use super::dispatcher::{validate_against_schema, Tool};
-use super::st_client::StClient;
+use super::st_client::{CharacterData, StClient};
 use crate::agent::events::WsEvent;
 use crate::agent::session::SharedSessionContext;
 use crate::versioning::VersionStore;
 
-/// Tool that writes one or more fields to a character card in SillyTavern.
+// ─── UpdateCharacterTool ────────────────────────────────────────────────────
+
+/// Tool that updates one or more fields on an existing character card in SillyTavern.
 ///
 /// Before writing, it snapshots the current character state for undo support.
 /// After a successful write, it sends an `UndoAvailable` event via the WebSocket channel.
-pub struct WriteCharacterTool {
+pub struct UpdateCharacterTool {
     st_client: Arc<Mutex<StClient>>,
     version_store: Arc<VersionStore>,
     event_tx: tokio::sync::mpsc::Sender<WsEvent>,
     session_ctx: SharedSessionContext,
 }
 
-impl WriteCharacterTool {
-    /// Create a new `WriteCharacterTool`.
+impl UpdateCharacterTool {
+    /// Create a new `UpdateCharacterTool`.
     pub fn new(
         st_client: Arc<Mutex<StClient>>,
         version_store: Arc<VersionStore>,
@@ -45,13 +50,13 @@ impl WriteCharacterTool {
 }
 
 #[async_trait]
-impl Tool for WriteCharacterTool {
+impl Tool for UpdateCharacterTool {
     fn name(&self) -> &str {
-        "write_character"
+        "update_character"
     }
 
     fn description(&self) -> &str {
-        "Write one or more fields to a character card in SillyTavern"
+        "Update one or more fields on an existing character card in SillyTavern. The character must already exist."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -60,7 +65,7 @@ impl Tool for WriteCharacterTool {
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "The character name to update"
+                    "description": "The character name to update (used for lookup)"
                 },
                 "description": {
                     "type": "string",
@@ -161,7 +166,7 @@ impl Tool for WriteCharacterTool {
             "character",
             name,
             &current_data,
-            "Before write_character",
+            "Before update_character",
         )?;
 
         // 4. Build the update payload (only changed fields)
@@ -283,14 +288,217 @@ impl Tool for WriteCharacterTool {
     }
 }
 
+// ─── CreateCharacterTool ────────────────────────────────────────────────────
+
+/// Tool that creates a brand-new character card in SillyTavern.
+///
+/// After creation, it sends a preview event to the frontend.
+pub struct CreateCharacterTool {
+    st_client: Arc<Mutex<StClient>>,
+    event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+    session_ctx: SharedSessionContext,
+}
+
+impl CreateCharacterTool {
+    /// Create a new `CreateCharacterTool`.
+    pub fn new(
+        st_client: Arc<Mutex<StClient>>,
+        event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+        session_ctx: SharedSessionContext,
+    ) -> Self {
+        Self {
+            st_client,
+            event_tx,
+            session_ctx,
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for CreateCharacterTool {
+    fn name(&self) -> &str {
+        "create_character"
+    }
+
+    fn description(&self) -> &str {
+        "Create a new character card in SillyTavern. The character must not already exist."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The character name (required, must be unique)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Character description / backstory"
+                },
+                "personality": {
+                    "type": "string",
+                    "description": "Personality summary"
+                },
+                "scenario": {
+                    "type": "string",
+                    "description": "Scenario / setting context"
+                },
+                "first_mes": {
+                    "type": "string",
+                    "description": "First message the character sends"
+                },
+                "mes_example": {
+                    "type": "string",
+                    "description": "Example dialogue"
+                },
+                "creator_notes": {
+                    "type": "string",
+                    "description": "Creator notes (metadata)"
+                },
+                "system_prompt": {
+                    "type": "string",
+                    "description": "System prompt override for this character"
+                },
+                "post_history_instructions": {
+                    "type": "string",
+                    "description": "Post-history instructions"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Tags for categorization"
+                },
+                "alternate_greetings": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Alternate first messages the user can swap between"
+                },
+                "character_book": {
+                    "type": "object",
+                    "description": "Embedded lorebook / character book"
+                },
+                "extensions": {
+                    "type": "object",
+                    "description": "Freeform extension data (depth prompts, ST plugins, etc.)"
+                },
+                "creator": {
+                    "type": "string",
+                    "description": "Card creator attribution"
+                },
+                "character_version": {
+                    "type": "string",
+                    "description": "Version string for the card"
+                },
+                "talkativeness": {
+                    "type": "number",
+                    "description": "0.0-1.0 scale for how often the character initiates in group chats"
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    fn validate_args(&self, args: &Value) -> Result<()> {
+        validate_against_schema(&self.parameters_schema(), args)
+    }
+
+    async fn execute(&self, args: Value) -> Result<Value> {
+        let name = args["name"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
+
+        // 1. Check that the character doesn't already exist
+        {
+            let mut client = self.st_client.lock().await;
+            let characters = client.get_characters().await?;
+            if characters.iter().any(|c| c.name.eq_ignore_ascii_case(name)) {
+                anyhow::bail!(
+                    "Character '{}' already exists. Use update_character to modify it.",
+                    name
+                );
+            }
+        }
+
+        // 2. Build the CharacterData from provided fields
+        let character_data = CharacterData {
+            name: name.to_string(),
+            description: args.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            personality: args.get("personality").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            scenario: args.get("scenario").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            first_mes: args.get("first_mes").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            mes_example: args.get("mes_example").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            creator_notes: args.get("creator_notes").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            system_prompt: args.get("system_prompt").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            post_history_instructions: args.get("post_history_instructions").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            tags: args.get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default(),
+            avatar: String::new(), // ST assigns the avatar filename on creation
+            alternate_greetings: args.get("alternate_greetings")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default(),
+            character_book: args.get("character_book").and_then(|v| if v.is_object() { Some(v.clone()) } else { None }),
+            extensions: args.get("extensions").and_then(|v| if v.is_object() { Some(v.clone()) } else { None }),
+            creator: args.get("creator").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            character_version: args.get("character_version").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            talkativeness: args.get("talkativeness").and_then(|v| v.as_f64()),
+        };
+
+        // 3. Create the character in SillyTavern
+        {
+            let mut client = self.st_client.lock().await;
+            client.create_character(&character_data).await?;
+        }
+
+        // 4. Re-read the created character to get the assigned avatar_url and send preview
+        let avatar_url = {
+            let mut client = self.st_client.lock().await;
+            let characters = client.get_characters().await?;
+            characters
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(name))
+                .map(|c| c.avatar.clone())
+                .unwrap_or_default()
+        };
+
+        if !avatar_url.is_empty() {
+            // Update session context
+            {
+                let mut ctx = self.session_ctx.lock().await;
+                ctx.last_avatar_url = Some(avatar_url.clone());
+            }
+
+            // Send preview event
+            let created_character = {
+                let mut client = self.st_client.lock().await;
+                client.get_character(&avatar_url).await?
+            };
+            let created_data = serde_json::to_value(&created_character)?;
+            let _ = self.event_tx.send(WsEvent::Preview {
+                tab: "character".to_string(),
+                data: created_data,
+            }).await;
+        }
+
+        // 5. Return success
+        Ok(serde_json::json!({
+            "success": true,
+            "character": name,
+            "avatar": avatar_url,
+            "message": format!("Character '{}' created", name)
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parameters_schema_has_required_name() {
-        // We can't easily construct a full WriteCharacterTool without dependencies,
-        // but we can test the schema structure directly.
         let schema = serde_json::json!({
             "type": "object",
             "properties": {
@@ -350,8 +558,6 @@ mod tests {
     #[test]
     fn test_field_merge_logic() {
         // Simulate the merge logic from execute()
-        use super::super::st_client::CharacterData;
-
         let mut character = CharacterData {
             name: "Kael".to_string(),
             description: "Original description".to_string(),

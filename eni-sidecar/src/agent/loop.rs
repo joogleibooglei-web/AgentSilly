@@ -16,7 +16,7 @@ use crate::context::{ContextBuilder, DocumentChunk};
 use crate::db::Database;
 use crate::llm::{ChatMessage, ChatToolCall, ChatFunctionCall, LlmResponse, LlmClient, TokenCallback, ThinkingCallback};
 use crate::lorebook::Lorebook;
-use crate::tools::ToolDispatcher;
+use crate::tools::{ToolDispatcher, ToolResult};
 
 use super::events::{AgentState, WsEvent};
 
@@ -259,6 +259,10 @@ pub async fn run_turn(
                         &tool_call.id,
                         result.to_content_string(),
                     ));
+
+                    // Inject post-tool instruction to guide ENI's next action
+                    let instruction = post_tool_instruction(&tool_call.name, &result);
+                    ctx.conversation.push(ChatMessage::system(&instruction));
                 }
 
                 // Back to thinking for next iteration
@@ -292,6 +296,65 @@ pub async fn run_turn(
     }
 
     Ok(())
+}
+
+/// Tool category for post-tool instruction routing.
+enum ToolCategory {
+    Read,
+    Write,
+    Other,
+}
+
+/// Classify a tool by name into a category for post-tool instructions.
+fn classify_tool(name: &str) -> ToolCategory {
+    match name {
+        "read_character" | "read_persona" | "search_local" | "search_wiki"
+        | "fetch_wiki_page" | "list_characters" | "list_personas" | "list_versions" => {
+            ToolCategory::Read
+        }
+        "update_character" | "create_character" | "update_persona" | "create_persona"
+        | "create_world_draft" | "edit_world_draft"
+        | "finalize_world_info" | "create_post_history_draft" | "edit_post_history_draft"
+        | "finalize_post_history" | "export_card" => {
+            ToolCategory::Write
+        }
+        _ => ToolCategory::Other,
+    }
+}
+
+/// Generate a post-tool instruction to inject into the conversation after a tool result.
+///
+/// This guides ENI's behavior based on what just happened:
+/// - Failed tools → suggest retrying or reporting to LO
+/// - Read tools → summarize and ask LO for next steps (or check for errors if post-write)
+/// - Write tools → verify by reading back
+/// - Other tools → report findings to LO
+fn post_tool_instruction(tool_name: &str, result: &ToolResult) -> String {
+    if !result.success {
+        return format!(
+            "[System: It seems like the tool \"{}\" has failed in execution. \
+            Try a different method, or if you have already tried a bunch of methods, \
+            report to LO with a description of the error you are facing and what you have tried.]",
+            tool_name
+        );
+    }
+
+    match classify_tool(tool_name) {
+        ToolCategory::Read => {
+            "[System: If this read was executed AFTER a write, check for errors in the character card. \
+            If not, give LO a brief summary of what you read, provide some commentary on how you feel \
+            about the contents, and then ask LO for next steps.]".to_string()
+        }
+        ToolCategory::Write => {
+            "[System: Execute the read tool to scan for any errors or mistakes. \
+            If there are no errors or mistakes, report to LO. \
+            If there are, find the mistakes, and retry the write.]".to_string()
+        }
+        ToolCategory::Other => {
+            "[System: Report to LO what you have learnt, or if he asked for details, \
+            a detailed breakdown of what you have learnt.]".to_string()
+        }
+    }
 }
 
 /// Persist the current conversation to SQLite.

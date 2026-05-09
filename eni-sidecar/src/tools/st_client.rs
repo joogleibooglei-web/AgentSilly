@@ -4,6 +4,7 @@
 //! endpoints. Handles CSRF token fetching and API key authentication.
 
 use anyhow::{Context, Result};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
@@ -900,6 +901,101 @@ impl StClient {
 
         debug!(avatar = %data.avatar, name = %data.name, "Persona edited");
         Ok(())
+    }
+
+    /// Create a new persona in SillyTavern.
+    ///
+    /// Generates a unique avatar ID and adds the persona name and description
+    /// to the settings. The persona will use a default avatar until the user
+    /// uploads a custom one through SillyTavern's UI.
+    pub async fn create_persona(&mut self, name: &str, description: &str, title: &str) -> Result<String> {
+        self.ensure_csrf().await?;
+
+        // Generate a unique avatar ID (timestamp-based, matching ST's pattern)
+        let avatar_id = format!("{}.png", Utc::now().timestamp_millis());
+
+        // 1. Upload a default avatar via the upload endpoint
+        // ST's /api/avatars/upload expects a JSON body with base64-encoded image data
+        let upload_url = format!("{}/api/avatars/upload", self.base_url);
+        debug!(url = %upload_url, avatar_id = %avatar_id, "Creating persona avatar");
+
+        // Minimal 1x1 transparent PNG as base64
+        let png_base64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+
+        let upload_body = serde_json::json!({
+            "avatar": png_base64,
+            "overwrite_name": avatar_id
+        });
+
+        let resp = self.post_request(&upload_url)
+            .json(&upload_body)
+            .send()
+            .await
+            .map_err(|e| {
+                self.invalidate_connection();
+                anyhow::anyhow!("SillyTavern is not reachable at '{}': {}", self.base_url, e)
+            })?;
+
+        if !resp.status().is_success() {
+            if resp.status().as_u16() == 403 {
+                self.invalidate_connection();
+            }
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            // Non-fatal: persona can still work without avatar upload
+            warn!("Avatar upload returned HTTP {} — {}. Proceeding with settings update.", status, body);
+        }
+
+        // 2. Update settings to add the persona name and description
+        let mut settings = self.get_settings_raw().await?;
+
+        // Add persona name
+        if let Some(personas) = settings
+            .pointer_mut("/power_user/personas")
+            .and_then(|v| v.as_object_mut())
+        {
+            personas.insert(
+                avatar_id.clone(),
+                serde_json::Value::String(name.to_string()),
+            );
+        } else {
+            // Create the personas map if it doesn't exist
+            if let Some(power_user) = settings.pointer_mut("/power_user").and_then(|v| v.as_object_mut()) {
+                let mut personas = serde_json::Map::new();
+                personas.insert(avatar_id.clone(), serde_json::Value::String(name.to_string()));
+                power_user.insert("personas".to_string(), serde_json::Value::Object(personas));
+            }
+        }
+
+        // Add persona description and title
+        if let Some(descriptions) = settings
+            .pointer_mut("/power_user/persona_descriptions")
+            .and_then(|v| v.as_object_mut())
+        {
+            descriptions.insert(
+                avatar_id.clone(),
+                serde_json::json!({
+                    "description": description,
+                    "title": title,
+                }),
+            );
+        } else {
+            // Create the persona_descriptions map if it doesn't exist
+            if let Some(power_user) = settings.pointer_mut("/power_user").and_then(|v| v.as_object_mut()) {
+                let mut descriptions = serde_json::Map::new();
+                descriptions.insert(avatar_id.clone(), serde_json::json!({
+                    "description": description,
+                    "title": title,
+                }));
+                power_user.insert("persona_descriptions".to_string(), serde_json::Value::Object(descriptions));
+            }
+        }
+
+        // 3. Save settings back
+        self.save_settings_raw(&settings).await?;
+
+        debug!(avatar_id = %avatar_id, name = %name, "Persona created");
+        Ok(avatar_id)
     }
 
     /// Fetch the raw settings JSON from SillyTavern.

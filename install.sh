@@ -25,7 +25,7 @@ print_banner() {
     echo -e "${PURPLE}${BOLD}"
     echo "  ╔══════════════════════════════════════════════╗"
     echo "  ║                                              ║"
-    echo "  ║       🌍  ENI World Builder  v0.4.0          ║"
+    echo "  ║       🌍  ENI World Builder  ${LATEST_VERSION:-}            ║"
     echo "  ║                                              ║"
     echo "  ║   AI-powered world building for SillyTavern  ║"
     echo "  ║                                              ║"
@@ -40,6 +40,28 @@ error()   { echo -e "  ${RED}✗${RESET} $1"; }
 step()    { echo -e "\n${BOLD}  $1${RESET}"; }
 
 # ─── Dependency Checks ───────────────────────────────────────────────────────
+
+GITHUB_REPO="joogleibooglei-web/AgentSilly"
+
+# Fetch the latest release version from GitHub.
+# Sets LATEST_VERSION (e.g., "v0.4.6") or falls back to empty string.
+fetch_latest_version() {
+    if command -v curl &>/dev/null; then
+        local tag
+        tag=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        if [ -n "$tag" ]; then
+            LATEST_VERSION="$tag"
+        fi
+    elif command -v wget &>/dev/null; then
+        local tag
+        tag=$(wget -qO- "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
+            | grep '"tag_name"' | head -1 | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+        if [ -n "$tag" ]; then
+            LATEST_VERSION="$tag"
+        fi
+    fi
+}
 
 check_deps() {
     local missing=()
@@ -269,6 +291,7 @@ print_success() {
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
+    fetch_latest_version
     print_banner
 
     step "Checking dependencies..."

@@ -25,7 +25,8 @@ use crate::search::SearchIndex;
 use crate::agent::session::{SessionContext, SharedSessionContext};
 use crate::tools::{
     self, ToolDispatcher, ExportCardTool, ListCharactersTool, ReadCharacterTool,
-    WriteCharacterTool, ReadPersonaTool, WritePersonaTool, ListPersonasTool,
+    UpdateCharacterTool, CreateCharacterTool,
+    ReadPersonaTool, UpdatePersonaTool, CreatePersonaTool, ListPersonasTool,
     CreateWorldDraftTool, EditWorldDraftTool, FinalizeWorldInfoTool,
     CreatePostHistoryDraftTool, EditPostHistoryDraftTool, FinalizePostHistoryTool,
     SearchLocalTool, SearchWikiTool, FetchWikiPageTool, CreateProjectTool, ManageTasksTool,
@@ -525,18 +526,27 @@ async fn handle_user_message(
 
             // Register all tools
             dispatcher.register(Box::new(ReadCharacterTool::new(Arc::clone(&st_client), event_tx.clone(), session_ctx.clone())));
-            dispatcher.register(Box::new(WriteCharacterTool::new(
+            dispatcher.register(Box::new(UpdateCharacterTool::new(
                 Arc::clone(&st_client),
                 Arc::clone(&version_store),
+                event_tx.clone(),
+                session_ctx.clone(),
+            )));
+            dispatcher.register(Box::new(CreateCharacterTool::new(
+                Arc::clone(&st_client),
                 event_tx.clone(),
                 session_ctx.clone(),
             )));
             dispatcher.register(Box::new(ListCharactersTool::new(Arc::clone(&st_client))));
             dispatcher.register(Box::new(ExportCardTool::new(Arc::clone(&st_client), None)));
             dispatcher.register(Box::new(ReadPersonaTool::new(Arc::clone(&st_client), event_tx.clone())));
-            dispatcher.register(Box::new(WritePersonaTool::new(
+            dispatcher.register(Box::new(UpdatePersonaTool::new(
                 Arc::clone(&st_client),
                 Arc::clone(&version_store),
+                event_tx.clone(),
+            )));
+            dispatcher.register(Box::new(CreatePersonaTool::new(
+                Arc::clone(&st_client),
                 event_tx.clone(),
             )));
             dispatcher.register(Box::new(ListPersonasTool::new(Arc::clone(&st_client))));

@@ -61,6 +61,10 @@ impl ContextBuilder {
     ///
     /// Assembles: system message (personality + post-card + reference chunks)
     /// followed by conversation history, truncated to fit within the token budget.
+    ///
+    /// Post-tool instruction messages (system messages starting with `[System:`)
+    /// are pruned so that only the most recent one is kept, preventing token bloat
+    /// from accumulated tool guidance across many iterations.
     pub fn build_messages(
         &self,
         conversation: &[ChatMessage],
@@ -77,11 +81,14 @@ impl ContextBuilder {
             return messages;
         }
 
+        // Strip older post-tool instructions, keeping only the most recent one.
+        let pruned_conversation = Self::prune_post_tool_instructions(conversation);
+
         // Truncate conversation to fit within token budget
         let system_tokens = count_message_tokens(&system_message);
         let remaining_budget = self.max_tokens.saturating_sub(system_tokens);
 
-        let truncated = self.truncate_to_budget(conversation, remaining_budget);
+        let truncated = self.truncate_to_budget(&pruned_conversation, remaining_budget);
         messages.extend(truncated.into_iter().cloned());
 
         messages
@@ -95,6 +102,47 @@ impl ContextBuilder {
     /// additional formatting or filtering logic.
     pub fn format_tools(tools: &[ToolDefinition]) -> Vec<ToolDefinition> {
         tools.to_vec()
+    }
+
+    /// Remove all post-tool instruction system messages except the most recent one.
+    ///
+    /// Post-tool instructions are identified by being system-role messages whose
+    /// content starts with `[System:`. This prevents token bloat from accumulating
+    /// guidance messages across many tool-call iterations.
+    fn prune_post_tool_instructions(conversation: &[ChatMessage]) -> Vec<ChatMessage> {
+        // Find the index of the last post-tool instruction
+        let last_instruction_idx = conversation
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, msg)| Self::is_post_tool_instruction(msg))
+            .map(|(i, _)| i);
+
+        match last_instruction_idx {
+            Some(keep_idx) => {
+                conversation
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, msg)| {
+                        // Keep everything that isn't a post-tool instruction,
+                        // plus the one we want to keep
+                        *i == keep_idx || !Self::is_post_tool_instruction(msg)
+                    })
+                    .map(|(_, msg)| msg.clone())
+                    .collect()
+            }
+            None => conversation.to_vec(),
+        }
+    }
+
+    /// Check if a message is a post-tool instruction injected by the agent loop.
+    fn is_post_tool_instruction(msg: &ChatMessage) -> bool {
+        msg.role == "system"
+            && msg
+                .content
+                .as_deref()
+                .map(|c| c.starts_with("[System:"))
+                .unwrap_or(false)
     }
 
     /// Build the system message content from personality + post-card + reference chunks.

@@ -1,12 +1,14 @@
-//! Tools: read_persona, write_persona, list_personas — manage user personas in SillyTavern.
+//! Tools: read_persona, update_persona, create_persona, list_personas — manage user personas in SillyTavern.
 //!
 //! SillyTavern stores personas in user settings (`power_user.personas` and
 //! `power_user.persona_descriptions`), keyed by avatar filename. These tools
 //! abstract that away — the user interacts by persona name (and optionally title
 //! to disambiguate personas with the same name).
 //!
-//! `write_persona` snapshots the previous state via VersionStore before writing,
+//! `update_persona` snapshots the previous state via VersionStore before writing,
 //! and sends an `UndoAvailable` event to the frontend after a successful write.
+//!
+//! `create_persona` creates a brand-new persona entry in SillyTavern's settings.
 
 use std::sync::Arc;
 
@@ -95,20 +97,20 @@ impl Tool for ReadPersonaTool {
     }
 }
 
-// ─── WritePersonaTool ───────────────────────────────────────────────────────
+// ─── UpdatePersonaTool ──────────────────────────────────────────────────────
 
-/// Tool that updates a user persona in SillyTavern.
+/// Tool that updates an existing user persona in SillyTavern.
 ///
 /// Before writing, it snapshots the current persona state for undo support.
 /// After a successful write, it sends an `UndoAvailable` event via the WebSocket channel.
-pub struct WritePersonaTool {
+pub struct UpdatePersonaTool {
     st_client: Arc<Mutex<StClient>>,
     version_store: Arc<VersionStore>,
     event_tx: tokio::sync::mpsc::Sender<WsEvent>,
 }
 
-impl WritePersonaTool {
-    /// Create a new `WritePersonaTool`.
+impl UpdatePersonaTool {
+    /// Create a new `UpdatePersonaTool`.
     pub fn new(
         st_client: Arc<Mutex<StClient>>,
         version_store: Arc<VersionStore>,
@@ -123,13 +125,13 @@ impl WritePersonaTool {
 }
 
 #[async_trait]
-impl Tool for WritePersonaTool {
+impl Tool for UpdatePersonaTool {
     fn name(&self) -> &str {
-        "write_persona"
+        "update_persona"
     }
 
     fn description(&self) -> &str {
-        "Update a user persona in SillyTavern. Looks up by name (and optionally title to disambiguate). Only provided fields are updated."
+        "Update an existing user persona in SillyTavern. Looks up by name (and optionally title to disambiguate). Only provided fields are updated."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -181,7 +183,7 @@ impl Tool for WritePersonaTool {
             "persona",
             entity_id,
             &current_data,
-            "Before write_persona",
+            "Before update_persona",
         )?;
 
         // 3. Merge provided fields into the existing persona data
@@ -224,6 +226,114 @@ impl Tool for WritePersonaTool {
             "avatar": updated.avatar,
             "title": updated.title,
             "message": format!("Persona '{}' updated", updated.name)
+        }))
+    }
+}
+
+// ─── CreatePersonaTool ──────────────────────────────────────────────────────
+
+/// Tool that creates a brand-new user persona in SillyTavern.
+///
+/// Creates a new persona entry in the settings with the given name, description,
+/// and optional title.
+pub struct CreatePersonaTool {
+    st_client: Arc<Mutex<StClient>>,
+    event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+}
+
+impl CreatePersonaTool {
+    /// Create a new `CreatePersonaTool`.
+    pub fn new(
+        st_client: Arc<Mutex<StClient>>,
+        event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+    ) -> Self {
+        Self {
+            st_client,
+            event_tx,
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for CreatePersonaTool {
+    fn name(&self) -> &str {
+        "create_persona"
+    }
+
+    fn description(&self) -> &str {
+        "Create a new user persona in SillyTavern. The persona name should not already exist."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The persona name (required)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "The persona description / content"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title to differentiate personas with the same name"
+                }
+            },
+            "required": ["name"]
+        })
+    }
+
+    fn validate_args(&self, args: &Value) -> Result<()> {
+        validate_against_schema(&self.parameters_schema(), args)
+    }
+
+    async fn execute(&self, args: Value) -> Result<Value> {
+        let name = args["name"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
+
+        let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
+        let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("");
+
+        // 1. Check if a persona with this name already exists
+        {
+            let mut client = self.st_client.lock().await;
+            let personas = client.get_personas().await?;
+            if personas.iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+                anyhow::bail!(
+                    "Persona '{}' already exists. Use update_persona to modify it.",
+                    name
+                );
+            }
+        }
+
+        // 2. Create the persona in SillyTavern
+        let avatar_id = {
+            let mut client = self.st_client.lock().await;
+            client.create_persona(name, description, title).await?
+        };
+
+        // 3. Send preview event to frontend
+        let persona_data = serde_json::json!({
+            "name": name,
+            "description": description,
+            "avatar": avatar_id,
+            "title": title,
+        });
+        let _ = self.event_tx.send(WsEvent::Preview {
+            tab: "persona".to_string(),
+            data: persona_data,
+        }).await;
+
+        // 4. Return success
+        Ok(serde_json::json!({
+            "success": true,
+            "persona": name,
+            "avatar": avatar_id,
+            "title": title,
+            "message": format!("Persona '{}' created", name)
         }))
     }
 }
@@ -308,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn test_write_persona_schema_requires_name() {
+    fn test_update_persona_schema_requires_name() {
         let schema = serde_json::json!({
             "type": "object",
             "properties": {
@@ -340,6 +450,37 @@ mod tests {
 
         let valid_with_title = serde_json::json!({"name": "Default", "title": "Alt", "description": "New desc"});
         assert!(validate_against_schema(&schema, &valid_with_title).is_ok());
+
+        let invalid = serde_json::json!({"description": "No name"});
+        assert!(validate_against_schema(&schema, &invalid).is_err());
+    }
+
+    #[test]
+    fn test_create_persona_schema_requires_name() {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The persona name"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "The persona description / content"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title"
+                }
+            },
+            "required": ["name"]
+        });
+
+        let valid = serde_json::json!({"name": "NewPersona", "description": "A new persona"});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let valid_minimal = serde_json::json!({"name": "NewPersona"});
+        assert!(validate_against_schema(&schema, &valid_minimal).is_ok());
 
         let invalid = serde_json::json!({"description": "No name"});
         assert!(validate_against_schema(&schema, &invalid).is_err());
