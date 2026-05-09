@@ -7,7 +7,6 @@
   import MessageBubble from './MessageBubble.svelte';
   import ToolCallCard from './ToolCallCard.svelte';
   import ThinkingBlock from './ThinkingBlock.svelte';
-  import ModelSelector from './ModelSelector.svelte';
   import SetupGuide from './SetupGuide.svelte';
 
   let messages: Message[] = $state([]);
@@ -115,7 +114,6 @@
       <span class="eni-name">ENI</span>
       <span class="eni-state">{getStatusText(agentStatus)}</span>
     </div>
-    <ModelSelector />
     <button
       class="new-chat-btn"
       onclick={handleNewChat}

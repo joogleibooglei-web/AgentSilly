@@ -14,6 +14,10 @@
   let postCardPrompt = $state('');
   let connectionState: ConnectionState = $state('disconnected');
 
+  // Available models fetched from the API
+  let availableModels: string[] = $state([]);
+  let fetchingModels = $state(false);
+
   interface ReferenceDoc {
     name: string;
     size: number;
@@ -33,6 +37,10 @@
       model = activeProfile.model;
       temperature = activeProfile.temperature;
       maxTokens = activeProfile.maxTokens;
+      // Fetch available models when profile loads with credentials
+      if (activeProfile.baseUrl && activeProfile.apiKey) {
+        fetchAvailableModels();
+      }
     }
 
     postCardPrompt = $config.postCardPrompt;
@@ -65,6 +73,47 @@
   function handleDisconnect(): void {
     const ws = getWsClient();
     ws.disconnect();
+  }
+
+  /** Fetch available models from the configured base URL */
+  async function fetchAvailableModels(): Promise<void> {
+    if (!baseUrl || !apiKey) return;
+    fetchingModels = true;
+    try {
+      const url = `${baseUrl.replace(/\/$/, '')}/models`;
+      const resp = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const models: string[] = (data.data || data)
+          .map((m: { id?: string }) => m.id)
+          .filter((id: unknown): id is string => typeof id === 'string')
+          .sort();
+        availableModels = models;
+      } else {
+        availableModels = [];
+      }
+    } catch {
+      availableModels = [];
+    }
+    fetchingModels = false;
+  }
+
+  function handleModelChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    model = select.value;
+    handleProfileFieldBlur('model', model);
+  }
+
+  function handleBaseUrlBlur(): void {
+    handleProfileFieldBlur('baseUrl', baseUrl);
+    fetchAvailableModels();
+  }
+
+  function handleApiKeyBlur(): void {
+    handleProfileFieldBlur('apiKey', apiKey);
+    fetchAvailableModels();
   }
 
   function handlePostCardBlur(): void {
@@ -147,7 +196,7 @@
 
     <!-- Model Profile Configuration -->
     <div class="section">
-      <div class="section-label">Model Profile</div>
+      <div class="section-label">Model Endpoint</div>
       <div class="form-group">
         <label class="form-label" for="settings-base-url">Base URL</label>
         <input
@@ -155,7 +204,7 @@
           class="form-input"
           type="text"
           bind:value={baseUrl}
-          onblur={() => handleProfileFieldBlur('baseUrl', baseUrl)}
+          onblur={handleBaseUrlBlur}
           placeholder="https://api.openai.com/v1"
         />
       </div>
@@ -166,20 +215,36 @@
           class="form-input"
           type="password"
           bind:value={apiKey}
-          onblur={() => handleProfileFieldBlur('apiKey', apiKey)}
+          onblur={handleApiKeyBlur}
           placeholder="sk-..."
         />
       </div>
       <div class="form-group">
         <label class="form-label" for="settings-model">Model</label>
-        <input
-          id="settings-model"
-          class="form-input"
-          type="text"
-          bind:value={model}
-          onblur={() => handleProfileFieldBlur('model', model)}
-          placeholder="gpt-4o"
-        />
+        {#if availableModels.length > 0}
+          <select
+            id="settings-model"
+            class="form-input"
+            value={model}
+            onchange={handleModelChange}
+          >
+            {#if model && !availableModels.includes(model)}
+              <option value={model}>{model}</option>
+            {/if}
+            {#each availableModels as m (m)}
+              <option value={m}>{m}</option>
+            {/each}
+          </select>
+        {:else}
+          <input
+            id="settings-model"
+            class="form-input"
+            type="text"
+            bind:value={model}
+            onblur={() => handleProfileFieldBlur('model', model)}
+            placeholder={fetchingModels ? 'Fetching models...' : 'gpt-4o'}
+          />
+        {/if}
       </div>
       <div class="form-row">
         <div class="form-group half">
