@@ -92,10 +92,21 @@ impl Tool for ExportCardTool {
 
         debug!(name = %name, format = %format, "Exporting character card");
 
+        // Resolve character name to avatar_url
+        let avatar_url = {
+            let mut client = self.st_client.lock().await;
+            let characters = client.get_characters().await?;
+            characters
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(name))
+                .map(|c| c.avatar.clone())
+                .ok_or_else(|| anyhow::anyhow!("Character '{}' not found", name))?
+        };
+
         // Fetch character data from SillyTavern
         let character = {
             let mut client = self.st_client.lock().await;
-            client.get_character(name).await?
+            client.get_character(&avatar_url).await?
         };
 
         // Assemble TavernCard V2 JSON structure

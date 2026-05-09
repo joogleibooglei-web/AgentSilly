@@ -134,13 +134,24 @@ impl Tool for WriteCharacterTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
 
-        // 1. Read current character state from SillyTavern
-        let current_character = {
+        // 1. Resolve character name to avatar_url
+        let avatar_url = {
             let mut client = self.st_client.lock().await;
-            client.get_character(name).await?
+            let characters = client.get_characters().await?;
+            characters
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(name))
+                .map(|c| c.avatar.clone())
+                .ok_or_else(|| anyhow::anyhow!("Character '{}' not found", name))?
         };
 
-        // 2. Snapshot the current state for undo
+        // 2. Read current character state for undo snapshot
+        let current_character = {
+            let mut client = self.st_client.lock().await;
+            client.get_character(&avatar_url).await?
+        };
+
+        // 3. Snapshot the current state for undo
         let current_data = serde_json::to_value(&current_character)?;
         self.version_store.snapshot(
             "character",
@@ -149,80 +160,72 @@ impl Tool for WriteCharacterTool {
             "Before write_character",
         )?;
 
-        // 3. Merge provided fields into the existing character data
-        let mut updated = current_character;
+        // 4. Build the update payload (only changed fields)
+        let mut updates = serde_json::Map::new();
         let mut updated_fields: Vec<String> = Vec::new();
 
         if let Some(v) = args.get("description").and_then(|v| v.as_str()) {
-            updated.description = v.to_string();
+            updates.insert("description".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("description".to_string());
         }
         if let Some(v) = args.get("personality").and_then(|v| v.as_str()) {
-            updated.personality = v.to_string();
+            updates.insert("personality".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("personality".to_string());
         }
         if let Some(v) = args.get("scenario").and_then(|v| v.as_str()) {
-            updated.scenario = v.to_string();
+            updates.insert("scenario".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("scenario".to_string());
         }
         if let Some(v) = args.get("first_mes").and_then(|v| v.as_str()) {
-            updated.first_mes = v.to_string();
+            updates.insert("first_mes".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("first_mes".to_string());
         }
         if let Some(v) = args.get("mes_example").and_then(|v| v.as_str()) {
-            updated.mes_example = v.to_string();
+            updates.insert("mes_example".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("mes_example".to_string());
         }
         if let Some(v) = args.get("creator_notes").and_then(|v| v.as_str()) {
-            updated.creator_notes = v.to_string();
+            updates.insert("creator_notes".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("creator_notes".to_string());
         }
         if let Some(v) = args.get("system_prompt").and_then(|v| v.as_str()) {
-            updated.system_prompt = v.to_string();
+            updates.insert("system_prompt".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("system_prompt".to_string());
         }
         if let Some(v) = args.get("post_history_instructions").and_then(|v| v.as_str()) {
-            updated.post_history_instructions = v.to_string();
+            updates.insert("post_history_instructions".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("post_history_instructions".to_string());
         }
         if let Some(tags_val) = args.get("tags").and_then(|v| v.as_array()) {
-            let tags: Vec<String> = tags_val
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect();
-            updated.tags = tags;
+            updates.insert("tags".to_string(), serde_json::Value::Array(tags_val.clone()));
             updated_fields.push("tags".to_string());
         }
         if let Some(alt_greetings_val) = args.get("alternate_greetings").and_then(|v| v.as_array()) {
-            let greetings: Vec<String> = alt_greetings_val
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect();
-            updated.alternate_greetings = greetings;
+            updates.insert("alternate_greetings".to_string(), serde_json::Value::Array(alt_greetings_val.clone()));
             updated_fields.push("alternate_greetings".to_string());
         }
         if let Some(v) = args.get("character_book") {
             if v.is_object() {
-                updated.character_book = Some(v.clone());
+                updates.insert("character_book".to_string(), v.clone());
                 updated_fields.push("character_book".to_string());
             }
         }
         if let Some(v) = args.get("extensions") {
             if v.is_object() {
-                updated.extensions = Some(v.clone());
+                updates.insert("extensions".to_string(), v.clone());
                 updated_fields.push("extensions".to_string());
             }
         }
         if let Some(v) = args.get("creator").and_then(|v| v.as_str()) {
-            updated.creator = v.to_string();
+            updates.insert("creator".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("creator".to_string());
         }
         if let Some(v) = args.get("character_version").and_then(|v| v.as_str()) {
-            updated.character_version = v.to_string();
+            updates.insert("character_version".to_string(), serde_json::Value::String(v.to_string()));
             updated_fields.push("character_version".to_string());
         }
         if let Some(v) = args.get("talkativeness").and_then(|v| v.as_f64()) {
-            updated.talkativeness = Some(v);
+            updates.insert("talkativeness".to_string(), serde_json::json!(v));
             updated_fields.push("talkativeness".to_string());
         }
 
@@ -234,13 +237,14 @@ impl Tool for WriteCharacterTool {
             }));
         }
 
-        // 4. Write the updated character back to SillyTavern
+        // 5. Write the updates to SillyTavern via merge-attributes
         {
+            let update_value = serde_json::Value::Object(updates);
             let mut client = self.st_client.lock().await;
-            client.edit_character(&updated).await?;
+            client.edit_character(&avatar_url, &update_value).await?;
         }
 
-        // 5. Send UndoAvailable event to frontend
+        // 6. Send UndoAvailable event to frontend
         let summary = format!("Character updated: {}", updated_fields.join(", "));
         let _ = self.event_tx.send(WsEvent::UndoAvailable {
             entity_type: "character".to_string(),

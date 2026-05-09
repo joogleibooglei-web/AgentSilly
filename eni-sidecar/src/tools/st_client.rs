@@ -385,26 +385,31 @@ impl StClient {
 
     /// List all characters available in SillyTavern.
     ///
-    /// Returns a summary for each character (name, avatar, last_modified).
-    /// On connection failure, invalidates the session so the next call re-detects ST.
+    /// Returns a lightweight summary for each character (name + avatar filename).
+    /// The ST `/api/characters/all` endpoint returns full card data, but we only
+    /// extract the fields needed for listing to avoid massive token counts.
     pub async fn get_characters(&mut self) -> Result<Vec<CharacterSummary>> {
         self.ensure_csrf().await?;
 
         let url = format!("{}/api/characters/all", self.base_url);
         debug!(url = %url, "Fetching character list");
 
-        let resp = self.get_request(&url).send().await.map_err(|e| {
-            self.invalidate_connection();
-            anyhow::anyhow!(
-                "SillyTavern is not reachable at '{}': {}. \
-                 Please ensure SillyTavern is running and the base URL is correct.",
-                self.base_url,
-                e
-            )
-        })?;
+        // ST requires POST for this endpoint (not GET)
+        let resp = self.post_request(&url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| {
+                self.invalidate_connection();
+                anyhow::anyhow!(
+                    "SillyTavern is not reachable at '{}': {}. \
+                     Please ensure SillyTavern is running and the base URL is correct.",
+                    self.base_url,
+                    e
+                )
+            })?;
 
         if !resp.status().is_success() {
-            // 403 often means CSRF token expired — invalidate so we re-fetch
             if resp.status().as_u16() == 403 {
                 self.invalidate_connection();
             }
@@ -415,22 +420,39 @@ impl StClient {
             );
         }
 
-        let characters: Vec<CharacterSummary> = resp.json().await.context(
+        // ST returns full character objects — extract only name + avatar
+        let raw: Vec<serde_json::Value> = resp.json().await.context(
             "Failed to parse character list response from SillyTavern",
         )?;
+
+        let characters: Vec<CharacterSummary> = raw
+            .iter()
+            .filter_map(|c| {
+                let name = c.get("name").and_then(|v| v.as_str())?.to_string();
+                let avatar = c.get("avatar").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                Some(CharacterSummary {
+                    name,
+                    avatar,
+                    last_modified: None,
+                })
+            })
+            .collect();
 
         debug!(count = characters.len(), "Fetched characters");
         Ok(characters)
     }
 
-    /// Get full character data by name.
-    pub async fn get_character(&mut self, name: &str) -> Result<CharacterData> {
+    /// Get full character data by avatar filename.
+    ///
+    /// ST uses `avatar_url` (the PNG filename, e.g. "Akko.png") as the character
+    /// identifier, not the character name.
+    pub async fn get_character(&mut self, avatar_url: &str) -> Result<CharacterData> {
         self.ensure_csrf().await?;
 
         let url = format!("{}/api/characters/get", self.base_url);
-        debug!(url = %url, name = %name, "Fetching character data");
+        debug!(url = %url, avatar_url = %avatar_url, "Fetching character data");
 
-        let body = serde_json::json!({ "name": name });
+        let body = serde_json::json!({ "avatar_url": avatar_url });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
             self.invalidate_connection();
@@ -448,27 +470,47 @@ impl StClient {
             }
             anyhow::bail!(
                 "Failed to get character '{}': HTTP {} from {}",
-                name,
+                avatar_url,
                 resp.status(),
                 url
             );
         }
 
         let character: CharacterData = resp.json().await.with_context(|| {
-            format!("Failed to parse character data for '{name}' from SillyTavern")
+            format!("Failed to parse character data for '{avatar_url}' from SillyTavern")
         })?;
 
         Ok(character)
     }
 
     /// Create a new character in SillyTavern.
+    ///
+    /// Uses the create endpoint with form-style JSON body.
     pub async fn create_character(&mut self, data: &CharacterData) -> Result<()> {
         self.ensure_csrf().await?;
 
         let url = format!("{}/api/characters/create", self.base_url);
         debug!(url = %url, name = %data.name, "Creating character");
 
-        let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
+        // ST's create endpoint expects ch_name and individual fields
+        let body = serde_json::json!({
+            "ch_name": data.name,
+            "description": data.description,
+            "personality": data.personality,
+            "scenario": data.scenario,
+            "first_mes": data.first_mes,
+            "mes_example": data.mes_example,
+            "creator_notes": data.creator_notes,
+            "system_prompt": data.system_prompt,
+            "post_history_instructions": data.post_history_instructions,
+            "tags": data.tags,
+            "creator": data.creator,
+            "character_version": data.character_version,
+            "alternate_greetings": data.alternate_greetings,
+            "talkativeness": data.talkativeness.unwrap_or(0.5),
+        });
+
+        let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
             self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
@@ -496,14 +538,24 @@ impl StClient {
         Ok(())
     }
 
-    /// Edit an existing character in SillyTavern.
-    pub async fn edit_character(&mut self, data: &CharacterData) -> Result<()> {
+    /// Edit an existing character in SillyTavern using merge-attributes.
+    ///
+    /// This does a deep merge of the provided fields into the existing card
+    /// and validates against the TavernCard spec. Only changed fields need
+    /// to be included in `updates`.
+    pub async fn edit_character(&mut self, avatar_url: &str, updates: &serde_json::Value) -> Result<()> {
         self.ensure_csrf().await?;
 
-        let url = format!("{}/api/characters/edit", self.base_url);
-        debug!(url = %url, name = %data.name, "Editing character");
+        let url = format!("{}/api/characters/merge-attributes", self.base_url);
+        debug!(url = %url, avatar = %avatar_url, "Editing character via merge-attributes");
 
-        let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
+        // merge-attributes expects { "avatar": "Name.png", ...fields_to_merge }
+        let mut body = updates.clone();
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("avatar".to_string(), serde_json::Value::String(avatar_url.to_string()));
+        }
+
+        let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
             self.invalidate_connection();
             anyhow::anyhow!(
                 "SillyTavern is not reachable at '{}': {}. \
@@ -518,27 +570,27 @@ impl StClient {
                 self.invalidate_connection();
             }
             let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
+            let resp_body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
                 "Failed to edit character '{}': HTTP {} — {}",
-                data.name,
+                avatar_url,
                 status,
-                body
+                resp_body
             );
         }
 
-        debug!(name = %data.name, "Character edited");
+        debug!(avatar = %avatar_url, "Character edited");
         Ok(())
     }
 
-    /// Delete a character from SillyTavern by name.
-    pub async fn delete_character(&mut self, name: &str) -> Result<()> {
+    /// Delete a character from SillyTavern by avatar filename.
+    pub async fn delete_character(&mut self, avatar_url: &str) -> Result<()> {
         self.ensure_csrf().await?;
 
         let url = format!("{}/api/characters/delete", self.base_url);
-        debug!(url = %url, name = %name, "Deleting character");
+        debug!(url = %url, avatar_url = %avatar_url, "Deleting character");
 
-        let body = serde_json::json!({ "name": name });
+        let body = serde_json::json!({ "avatar_url": avatar_url });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
             self.invalidate_connection();
@@ -558,13 +610,13 @@ impl StClient {
             let body_text = resp.text().await.unwrap_or_default();
             anyhow::bail!(
                 "Failed to delete character '{}': HTTP {} — {}",
-                name,
+                avatar_url,
                 status,
                 body_text
             );
         }
 
-        debug!(name = %name, "Character deleted");
+        debug!(avatar_url = %avatar_url, "Character deleted");
         Ok(())
     }
 
@@ -684,13 +736,13 @@ impl StClient {
     /// Export a character's full JSON data from SillyTavern.
     ///
     /// Returns the raw JSON value representing the complete character export.
-    pub async fn export_character(&mut self, name: &str) -> Result<serde_json::Value> {
+    pub async fn export_character(&mut self, avatar_url: &str) -> Result<serde_json::Value> {
         self.ensure_csrf().await?;
 
         let url = format!("{}/api/characters/export", self.base_url);
-        debug!(url = %url, name = %name, "Exporting character");
+        debug!(url = %url, avatar_url = %avatar_url, "Exporting character");
 
-        let body = serde_json::json!({ "name": name });
+        let body = serde_json::json!({ "avatar_url": avatar_url, "format": "json" });
 
         let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
             self.invalidate_connection();
@@ -710,17 +762,17 @@ impl StClient {
             let body_text = resp.text().await.unwrap_or_default();
             anyhow::bail!(
                 "Failed to export character '{}': HTTP {} — {}",
-                name,
+                avatar_url,
                 status,
                 body_text
             );
         }
 
         let export: serde_json::Value = resp.json().await.with_context(|| {
-            format!("Failed to parse export data for character '{name}' from SillyTavern")
+            format!("Failed to parse export data for character '{avatar_url}' from SillyTavern")
         })?;
 
-        debug!(name = %name, "Character exported");
+        debug!(avatar_url = %avatar_url, "Character exported");
         Ok(export)
     }
 }

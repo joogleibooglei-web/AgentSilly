@@ -108,8 +108,20 @@ impl Tool for UndoChangeTool {
                 let character: CharacterData = serde_json::from_value(data.clone())
                     .map_err(|e| anyhow::anyhow!("Failed to deserialize character snapshot: {}", e))?;
 
+                // Resolve character name to avatar_url for the merge-attributes endpoint
+                let avatar_url = {
+                    let mut client = self.st_client.lock().await;
+                    let characters = client.get_characters().await?;
+                    characters
+                        .iter()
+                        .find(|c| c.name.eq_ignore_ascii_case(&character.name))
+                        .map(|c| c.avatar.clone())
+                        .unwrap_or_else(|| format!("{}.png", character.name))
+                };
+
+                let update_value = serde_json::to_value(&character)?;
                 let mut client = self.st_client.lock().await;
-                client.edit_character(&character).await?;
+                client.edit_character(&avatar_url, &update_value).await?;
 
                 debug!(name = %entity_id, "Character restored from version history");
 

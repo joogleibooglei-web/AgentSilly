@@ -61,10 +61,21 @@ impl Tool for ReadCharacterTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
 
-        // Fetch full character data from SillyTavern
+        // Resolve character name to avatar_url by listing all characters
+        let avatar_url = {
+            let mut client = self.st_client.lock().await;
+            let characters = client.get_characters().await?;
+            characters
+                .iter()
+                .find(|c| c.name.eq_ignore_ascii_case(name))
+                .map(|c| c.avatar.clone())
+                .ok_or_else(|| anyhow::anyhow!("Character '{}' not found", name))?
+        };
+
+        // Fetch full character data from SillyTavern using avatar_url
         let character = {
             let mut client = self.st_client.lock().await;
-            client.get_character(name).await?
+            client.get_character(&avatar_url).await?
         };
 
         // Serialize the full character to a JSON Value
