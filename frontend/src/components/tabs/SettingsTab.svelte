@@ -14,9 +14,10 @@
   let postCardPrompt = $state('');
   let connectionState: ConnectionState = $state('disconnected');
   let stBaseUrl = $state('http://localhost:8000');
+  let stConnectionState: 'connected' | 'disconnected' | 'testing' = $state('disconnected');
 
   // Version info
-  const FRONTEND_VERSION = '0.3.5';
+  const FRONTEND_VERSION = '0.4.0';
   let sidecarVersion = $state('—');
 
   // Available models fetched from the API
@@ -70,6 +71,53 @@
       sidecarVersion = '—';
     }
   }
+
+  /** Auto-detect the SillyTavern URL from the browser context */
+  function autoDetectStUrl(): void {
+    if (typeof window !== 'undefined' && window.location) {
+      const origin = window.location.origin;
+      if (origin.startsWith('http')) {
+        stBaseUrl = origin;
+      }
+    }
+  }
+
+  /** Test the SillyTavern connection by hitting its CSRF endpoint */
+  async function testStConnection(): Promise<void> {
+    stConnectionState = 'testing';
+    try {
+      const url = stBaseUrl.replace(/\/$/, '');
+      const resp = await fetch(`${url}/csrf-token`, { 
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        stConnectionState = 'connected';
+        // Also report to sidecar so it uses this URL
+        sendConfigUpdate('st_base_url', stBaseUrl);
+      } else {
+        stConnectionState = 'disconnected';
+      }
+    } catch {
+      stConnectionState = 'disconnected';
+    }
+  }
+
+  /** Handle ST URL change — save and test */
+  function handleStUrlBlur(): void {
+    sendConfigUpdate('st_base_url', stBaseUrl);
+    testStConnection();
+  }
+
+  // Auto-detect ST URL on load and test connection
+  autoDetectStUrl();
+  // Defer the test until after the sidecar connection is established
+  $effect(() => {
+    if (connectionState === 'connected') {
+      sendConfigUpdate('st_base_url', stBaseUrl);
+      testStConnection();
+    }
+  });
 
   function sendConfigUpdate(key: string, value: unknown): void {
     const ws = getWsClient();
@@ -200,7 +248,7 @@
 </script>
 
   <div class="settings-tab">
-    <!-- Sidecar Connection Status -->
+    <!-- Sidecar Connection -->
     <div class="section">
       <div class="section-label">Sidecar Connection</div>
       <div class="status-row">
@@ -212,6 +260,20 @@
           <button class="disconnect-btn" onclick={handleDisconnect}>Disconnect</button>
         {/if}
       </div>
+    </div>
+
+    <!-- SillyTavern Server Connection -->
+    <div class="section">
+      <div class="section-label">SillyTavern Server</div>
+      <div class="status-row">
+        <span class="status-dot" style="background: {stConnectionState === 'connected' ? 'var(--status-green, #4caf50)' : stConnectionState === 'testing' ? 'var(--status-yellow, #ff9800)' : 'var(--status-red, #f44336)'}"></span>
+        <span class="status-text">{stConnectionState === 'connected' ? 'Connected' : stConnectionState === 'testing' ? 'Testing...' : 'Disconnected'}</span>
+        {#if stConnectionState === 'disconnected'}
+          <button class="connect-btn" onclick={testStConnection}>Connect</button>
+        {:else if stConnectionState === 'connected'}
+          <button class="disconnect-btn" onclick={() => { stConnectionState = 'disconnected'; }}>Disconnect</button>
+        {/if}
+      </div>
       <div class="form-group" style="margin-top: 10px;">
         <label class="form-label" for="settings-st-url">SillyTavern URL</label>
         <input
@@ -219,9 +281,10 @@
           class="form-input"
           type="text"
           bind:value={stBaseUrl}
-          onblur={() => sendConfigUpdate('st_base_url', stBaseUrl)}
+          onblur={handleStUrlBlur}
           placeholder="http://localhost:8000"
         />
+        <div class="form-hint">Auto-detected from browser. Change if ST is on a different port.</div>
       </div>
     </div>
 
@@ -484,6 +547,13 @@
 
   .form-input::placeholder {
     color: var(--text-muted);
+  }
+
+  .form-hint {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-style: italic;
   }
 
   .form-textarea {

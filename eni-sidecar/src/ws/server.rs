@@ -268,8 +268,8 @@ async fn handle_connection(
                         handle_test_connection(&state, &ws_sender).await;
                     }
                     ClientMessage::ReportStUrl { url } => {
-                        info!(url = %url, "Frontend reported SillyTavern URL");
-                        // Store it in the config table for use by the ST client
+                        info!(url = %url, "Frontend reported SillyTavern URL — updating st_base_url");
+                        // Store it in the config table for use by the ST client on next turn
                         let key = "st_base_url".to_string();
                         let value_str = serde_json::to_string(&url).unwrap_or_default();
                         let db = state.db.lock().unwrap();
@@ -450,11 +450,42 @@ async fn handle_user_message(
             let mut dispatcher = ToolDispatcher::new();
 
             // Create a shared StClient for character/persona tools
-            let st_client = match StClient::new(&state.config.sillytavern).await {
+            // First check the database for user-configured ST URL (set via UI or auto-reported),
+            // then fall back to the TOML config file default.
+            let st_config = {
+                let db_guard = state.db.lock().unwrap();
+                let db_st_url = db_guard
+                    .conn()
+                    .query_row(
+                        "SELECT value FROM config WHERE key = ?1",
+                        rusqlite::params!["st_base_url"],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .ok()
+                    .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)));
+
+                let db_api_key = db_guard
+                    .conn()
+                    .query_row(
+                        "SELECT value FROM config WHERE key = ?1",
+                        rusqlite::params!["st_api_key"],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .ok()
+                    .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)));
+
+                crate::config::StConfig {
+                    base_url: db_st_url.unwrap_or_else(|| state.config.sillytavern.base_url.clone()),
+                    api_key: db_api_key.or_else(|| state.config.sillytavern.api_key.clone()),
+                }
+            };
+
+            info!(url = %st_config.base_url, "Creating ST client with URL");
+
+            let st_client = match StClient::new(&st_config).await {
                 Ok(client) => Arc::new(tokio::sync::Mutex::new(client)),
                 Err(e) => {
                     warn!(error = %e, "Failed to create ST client; character/persona tools will be unavailable");
-                    // Still create a client that will fail gracefully on use
                     let fallback = StClient::new(&crate::config::StConfig::default()).await
                         .unwrap_or_else(|_| panic!("Failed to create fallback ST client"));
                     Arc::new(tokio::sync::Mutex::new(fallback))
