@@ -40,7 +40,8 @@ export type ClientMessage =
   | { type: 'switch_model'; profile: string }
   | { type: 'new_conversation' }
   | { type: 'undo'; entity_type: string; entity_id: string }
-  | { type: 'update_config'; key: string; value: unknown };
+  | { type: 'update_config'; key: string; value: unknown }
+  | { type: 'register_session'; session_id: string };
 
 export type ServerMessage =
   | { type: 'token'; content: string }
@@ -77,6 +78,21 @@ const DEFAULT_OPTIONS: Required<WsClientOptions> = {
 
 // --- WebSocket Client ---
 
+/**
+ * Get or create a unique session ID for this browser tab.
+ * Uses sessionStorage so each tab gets its own UUID that persists
+ * across page reloads within the same tab, but is unique per tab.
+ */
+function getTabSessionId(): string {
+  const STORAGE_KEY = 'eni_tab_session_id';
+  let sessionId = sessionStorage.getItem(STORAGE_KEY);
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    sessionStorage.setItem(STORAGE_KEY, sessionId);
+  }
+  return sessionId;
+}
+
 export class WsClient {
   private ws: WebSocket | null = null;
   private options: Required<WsClientOptions>;
@@ -105,6 +121,8 @@ export class WsClient {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       setConnected();
+      // Register this tab's session ID so the sidecar ties the conversation to this tab
+      this.send({ type: 'register_session', session_id: getTabSessionId() });
       this.reportStUrl();
       this.fetchConfig();
       this.fetchConversationHistory();
@@ -172,9 +190,15 @@ export class WsClient {
 
   /**
    * Send a new conversation request.
+   * Also resets the tab session ID so the new conversation gets a fresh UUID.
    */
   sendNewConversation(): void {
     this.send({ type: 'new_conversation' });
+    // Generate a new session ID for this tab's new conversation
+    const newSessionId = crypto.randomUUID();
+    sessionStorage.setItem('eni_tab_session_id', newSessionId);
+    // Register the new session with the sidecar
+    this.send({ type: 'register_session', session_id: newSessionId });
   }
 
   /**
@@ -245,30 +269,17 @@ export class WsClient {
   }
 
   /**
-   * Fetch the most recent conversation history from the sidecar HTTP API on connect.
-   * Populates the conversation store with restored messages.
+   * Fetch the conversation history for this tab's session from the sidecar HTTP API.
+   * Uses the tab session ID as the conversation ID.
    */
   private async fetchConversationHistory(): Promise<void> {
     const baseUrl = `http://${this.options.host}:${this.options.httpPort}`;
+    const sessionId = getTabSessionId();
     try {
-      // First, get the list of conversations
-      const listResponse = await fetch(`${baseUrl}/conversations`);
-      if (!listResponse.ok) {
-        console.warn('[WsClient] Failed to fetch conversations list:', listResponse.status);
-        return;
-      }
-      const conversations: Array<{ id: string; title: string; created_at: string }> = await listResponse.json();
-      if (!conversations || conversations.length === 0) {
-        return; // No conversations to restore
-      }
-
-      // Get the most recent conversation (first in the list, assumed sorted by recency)
-      const latestConversation = conversations[0];
-
-      // Fetch messages for the latest conversation
-      const messagesResponse = await fetch(`${baseUrl}/conversations/${latestConversation.id}`);
+      // Fetch messages for this tab's conversation (session_id == conversation_id)
+      const messagesResponse = await fetch(`${baseUrl}/conversations/${sessionId}`);
       if (!messagesResponse.ok) {
-        console.warn('[WsClient] Failed to fetch conversation messages:', messagesResponse.status);
+        // 404 means no conversation yet for this tab — that's fine, start fresh
         return;
       }
       const data = await messagesResponse.json();

@@ -130,72 +130,13 @@ async fn handle_connection(
     let turn_running = Arc::new(tokio::sync::Mutex::new(false));
 
     // Per-connection agent context state.
-    // Load the most recent non-archived conversation from SQLite so the agent
-    // retains context across WebSocket reconnections.
-    let (initial_conversation, initial_conversation_id) = {
-        let db = state.db.lock().unwrap();
-        let conv_id: Option<String> = db
-            .conn()
-            .query_row(
-                "SELECT id FROM conversations WHERE archived = 0 ORDER BY created_at DESC LIMIT 1",
-                [],
-                |row| row.get(0),
-            )
-            .ok();
-
-        if let Some(ref cid) = conv_id {
-            let mut stmt = db
-                .conn()
-                .prepare(
-                    "SELECT role, content, metadata FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
-                )
-                .unwrap();
-
-            let messages: Vec<crate::llm::ChatMessage> = stmt
-                .query_map(rusqlite::params![cid], |row| {
-                    let role: String = row.get(0)?;
-                    let content: Option<String> = row.get(1)?;
-                    let metadata: Option<String> = row.get(2)?;
-                    Ok((role, content, metadata))
-                })
-                .unwrap()
-                .filter_map(|r| r.ok())
-                .filter_map(|(role, content, metadata)| {
-                    match role.as_str() {
-                        "user" => Some(crate::llm::ChatMessage::user(content.as_deref().unwrap_or(""))),
-                        "assistant" => {
-                            // Check if this assistant message had tool calls (stored in metadata)
-                            if let Some(ref meta) = metadata {
-                                if let Ok(tool_calls) = serde_json::from_str::<Vec<crate::llm::ChatToolCall>>(meta) {
-                                    if !tool_calls.is_empty() {
-                                        return Some(crate::llm::ChatMessage::assistant_tool_calls(tool_calls));
-                                    }
-                                }
-                            }
-                            Some(crate::llm::ChatMessage::assistant(content.as_deref().unwrap_or("")))
-                        }
-                        "tool" => {
-                            // Tool results need a tool_call_id; we stored it in metadata or can skip
-                            // For simplicity, skip tool messages during restore — the assistant's
-                            // text responses capture the essential context
-                            None
-                        }
-                        _ => None, // Skip system messages (rebuilt fresh each turn)
-                    }
-                })
-                .collect();
-
-            info!(conversation_id = %cid, message_count = messages.len(), "Restored conversation from database");
-            (messages, cid.clone())
-        } else {
-            (Vec::new(), uuid::Uuid::new_v4().to_string())
-        }
-    };
-
+    // Start with an empty conversation — the frontend will send a RegisterSession
+    // message with its tab UUID, and we'll create a fresh conversation for it.
+    // Temp conversations are cleaned up on sidecar restart anyway.
     let conversation: Arc<tokio::sync::Mutex<Vec<crate::llm::ChatMessage>>> =
-        Arc::new(tokio::sync::Mutex::new(initial_conversation));
+        Arc::new(tokio::sync::Mutex::new(Vec::new()));
     let conversation_id: Arc<tokio::sync::Mutex<String>> =
-        Arc::new(tokio::sync::Mutex::new(initial_conversation_id));
+        Arc::new(tokio::sync::Mutex::new(uuid::Uuid::new_v4().to_string()));
 
     // Send initial idle status
     let _ = ws_sender
@@ -280,6 +221,16 @@ async fn handle_connection(
                             "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
                             rusqlite::params![&key, &value_str],
                         );
+                    }
+                    ClientMessage::RegisterSession { session_id } => {
+                        handle_register_session(
+                            &session_id,
+                            &state,
+                            &ws_sender,
+                            &conversation,
+                            &conversation_id,
+                        )
+                        .await;
                     }
                 }
             }
@@ -725,6 +676,93 @@ async fn handle_new_conversation(
             content: "New conversation started.".to_string(),
         })
         .await;
+}
+
+/// Handle a session registration — the frontend sends its tab UUID.
+/// Each tab gets a fresh conversation tied to that session_id.
+/// If the session_id already has a non-archived conversation in the DB,
+/// we restore it (handles page reloads within the same tab).
+async fn handle_register_session(
+    session_id: &str,
+    state: &Arc<AppState>,
+    ws_sender: &WebSocketSender,
+    conversation: &Arc<tokio::sync::Mutex<Vec<crate::llm::ChatMessage>>>,
+    conversation_id: &Arc<tokio::sync::Mutex<String>>,
+) {
+    // Look for an existing non-archived conversation with this session_id as its ID.
+    // We use the session_id directly as the conversation_id for tab-tied chats.
+    let existing = {
+        let db = state.db.lock().unwrap();
+        db.conn()
+            .query_row(
+                "SELECT id FROM conversations WHERE id = ?1 AND archived = 0",
+                rusqlite::params![session_id],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+    };
+
+    if let Some(ref cid) = existing {
+        // Restore the conversation from the DB (tab was reloaded, WS reconnected)
+        let messages = {
+            let db = state.db.lock().unwrap();
+            let mut stmt = db
+                .conn()
+                .prepare(
+                    "SELECT role, content, metadata FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+                )
+                .unwrap();
+
+            stmt.query_map(rusqlite::params![cid], |row| {
+                let role: String = row.get(0)?;
+                let content: Option<String> = row.get(1)?;
+                let metadata: Option<String> = row.get(2)?;
+                Ok((role, content, metadata))
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .filter_map(|(role, content, metadata)| {
+                match role.as_str() {
+                    "user" => Some(crate::llm::ChatMessage::user(content.as_deref().unwrap_or(""))),
+                    "assistant" => {
+                        if let Some(ref meta) = metadata {
+                            if let Ok(tool_calls) = serde_json::from_str::<Vec<crate::llm::ChatToolCall>>(meta) {
+                                if !tool_calls.is_empty() {
+                                    return Some(crate::llm::ChatMessage::assistant_tool_calls(tool_calls));
+                                }
+                            }
+                        }
+                        Some(crate::llm::ChatMessage::assistant(content.as_deref().unwrap_or("")))
+                    }
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>()
+        };
+
+        info!(session_id = %session_id, message_count = messages.len(), "Restored session conversation from database");
+
+        {
+            let mut conv = conversation.lock().await;
+            *conv = messages;
+        }
+        {
+            let mut id = conversation_id.lock().await;
+            *id = cid.clone();
+        }
+    } else {
+        // New session — create a fresh conversation with the session_id as its ID
+        {
+            let mut conv = conversation.lock().await;
+            conv.clear();
+        }
+        {
+            let mut id = conversation_id.lock().await;
+            *id = session_id.to_string();
+        }
+
+        info!(session_id = %session_id, "New tab session registered with fresh conversation");
+    }
 }
 
 /// Handle an undo request — pop the latest version for the specified entity.

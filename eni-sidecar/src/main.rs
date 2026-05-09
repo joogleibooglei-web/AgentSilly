@@ -41,6 +41,23 @@ async fn main() -> Result<()> {
 
     // Initialize SQLite database
     let database = db::Database::open(&config.db_path)?;
+
+    // On startup, destroy all non-archived (temp) conversations and their messages.
+    // This ensures a clean slate each time the sidecar restarts.
+    {
+        let deleted = database.conn().execute(
+            "DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE archived = 0)",
+            [],
+        ).unwrap_or(0);
+        let convs = database.conn().execute(
+            "DELETE FROM conversations WHERE archived = 0",
+            [],
+        ).unwrap_or(0);
+        if convs > 0 {
+            info!(conversations = convs, messages = deleted, "Cleaned up temp conversations on startup");
+        }
+    }
+
     let db = Arc::new(std::sync::Mutex::new(database));
 
     // Initialize search index

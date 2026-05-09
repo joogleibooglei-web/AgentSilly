@@ -40,6 +40,12 @@ pub enum ClientMessage {
     ReportStUrl {
         url: String,
     },
+    /// Frontend registers a tab session ID. Each browser tab gets a unique UUID
+    /// stored in sessionStorage. The sidecar creates a fresh conversation for
+    /// each unique session_id it hasn't seen before.
+    RegisterSession {
+        session_id: String,
+    },
 }
 
 /// A sender wrapper that serializes `WsEvent` variants and relays them
