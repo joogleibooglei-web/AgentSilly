@@ -137,7 +137,7 @@ impl ContextBuilder {
 
     /// Check if a message is a post-tool instruction injected by the agent loop.
     fn is_post_tool_instruction(msg: &ChatMessage) -> bool {
-        msg.role == "system"
+        (msg.role == "system" || msg.role == "user")
             && msg
                 .content
                 .as_deref()

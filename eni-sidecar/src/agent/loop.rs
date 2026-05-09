@@ -260,9 +260,11 @@ pub async fn run_turn(
                         result.to_content_string(),
                     ));
 
-                    // Inject post-tool instruction to guide ENI's next action
+                    // Inject post-tool instruction to guide ENI's next action.
+                    // Uses "user" role because many LLM APIs ignore system messages
+                    // that appear mid-conversation (after tool results).
                     let instruction = post_tool_instruction(&tool_call.name, &result);
-                    ctx.conversation.push(ChatMessage::system(&instruction));
+                    ctx.conversation.push(ChatMessage::user(&instruction));
                 }
 
                 // Back to thinking for next iteration
