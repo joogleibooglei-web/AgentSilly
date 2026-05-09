@@ -205,11 +205,20 @@ install_plugin() {
             exit 0
         fi
 
-        # Pull latest
+        # Pull latest — reset to ensure clean state
         info "Updating existing installation..."
         cd "$PLUGIN_DIR"
-        git pull origin main --quiet
+        git fetch origin main --quiet
+        git reset --hard origin/main --quiet
         success "Updated to latest version"
+
+        # Clean the frontend extension cache so ST picks up new UI on restart
+        local st_ext_dir
+        st_ext_dir="$ST_PATH/public/scripts/extensions/third-party/eni-world-builder"
+        if [ -d "$st_ext_dir" ]; then
+            rm -rf "$st_ext_dir"
+            success "Cleared stale UI extension cache"
+        fi
     else
         # Fresh clone
         info "Cloning ENI World Builder..."
