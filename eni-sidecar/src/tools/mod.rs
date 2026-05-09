@@ -25,6 +25,8 @@ pub use drafts::EditWorldDraftTool;
 pub use drafts::EditPostHistoryDraftTool;
 pub use drafts::FinalizeWorldInfoTool;
 pub use drafts::FinalizePostHistoryTool;
+pub use drafts::ReadWorldDraftTool;
+pub use drafts::ReadPostHistoryDraftTool;
 pub use export_card::ExportCardTool;
 pub use fetch_wiki_page::FetchWikiPageTool;
 pub use list_characters::ListCharactersTool;

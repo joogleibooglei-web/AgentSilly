@@ -311,7 +311,8 @@ enum ToolCategory {
 fn classify_tool(name: &str) -> ToolCategory {
     match name {
         "read_character" | "read_persona" | "search_local" | "search_wiki"
-        | "fetch_wiki_page" | "list_characters" | "list_personas" | "list_versions" => {
+        | "fetch_wiki_page" | "list_characters" | "list_personas" | "list_versions"
+        | "read_world_draft" | "read_post_history_draft" => {
             ToolCategory::Read
         }
         "update_character" | "create_character" | "update_persona" | "create_persona"

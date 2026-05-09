@@ -29,6 +29,7 @@ use crate::tools::{
     ReadPersonaTool, UpdatePersonaTool, CreatePersonaTool, ListPersonasTool,
     CreateWorldDraftTool, EditWorldDraftTool, FinalizeWorldInfoTool,
     CreatePostHistoryDraftTool, EditPostHistoryDraftTool, FinalizePostHistoryTool,
+    ReadWorldDraftTool, ReadPostHistoryDraftTool,
     SearchLocalTool, SearchWikiTool, FetchWikiPageTool, CreateProjectTool, ManageTasksTool,
     UndoChangeTool, ListVersionsTool, StClient,
 };
@@ -503,6 +504,7 @@ async fn handle_user_message(
             dispatcher.register(Box::new(ListPersonasTool::new(Arc::clone(&st_client))));
             dispatcher.register(Box::new(CreateWorldDraftTool::new(event_tx.clone())));
             dispatcher.register(Box::new(EditWorldDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(ReadWorldDraftTool::new(event_tx.clone())));
             dispatcher.register(Box::new(FinalizeWorldInfoTool::new(
                 Arc::clone(&st_client),
                 session_ctx.clone(),
@@ -510,6 +512,7 @@ async fn handle_user_message(
             )));
             dispatcher.register(Box::new(CreatePostHistoryDraftTool::new(event_tx.clone())));
             dispatcher.register(Box::new(EditPostHistoryDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(ReadPostHistoryDraftTool::new(event_tx.clone())));
             dispatcher.register(Box::new(FinalizePostHistoryTool::new(
                 Arc::clone(&st_client),
                 session_ctx.clone(),

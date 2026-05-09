@@ -286,9 +286,12 @@ impl Tool for FinalizeWorldInfoTool {
         // 4. Compute merged description: draft prepended to existing description
         let merged_description = format!("{}\n\n{}", draft_content, character.description);
 
-        // 5. Write merged description back via StClient
+        // 5. Write merged description back via StClient (both V1 top-level and V2 data.*)
         {
-            let updates = serde_json::json!({ "description": merged_description });
+            let updates = serde_json::json!({
+                "description": merged_description,
+                "data": { "description": merged_description }
+            });
             let mut client = self.st_client.lock().await;
             client.edit_character(&avatar_url, &updates).await?;
         }
@@ -592,9 +595,12 @@ impl Tool for FinalizePostHistoryTool {
             })?
         };
 
-        // 3. Write draft content directly to post_history_instructions (full replacement)
+        // 3. Write draft content directly to post_history_instructions (full replacement, both V1 and V2)
         {
-            let updates = serde_json::json!({ "post_history_instructions": draft_content });
+            let updates = serde_json::json!({
+                "post_history_instructions": draft_content,
+                "data": { "post_history_instructions": draft_content }
+            });
             let mut client = self.st_client.lock().await;
             client.edit_character(&avatar_url, &updates).await?;
         }
@@ -635,6 +641,141 @@ impl Tool for FinalizePostHistoryTool {
             "success": true,
             "character": avatar_url,
             "message": "Post-history finalized"
+        }))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ReadWorldDraftTool
+// ---------------------------------------------------------------------------
+
+/// Tool that reads the current world info draft file.
+///
+/// Returns the draft content if it exists, or an error message if no draft
+/// has been created yet. This allows the LLM to review what's been drafted
+/// before editing or finalizing.
+pub struct ReadWorldDraftTool {
+    event_tx: mpsc::Sender<WsEvent>,
+}
+
+impl ReadWorldDraftTool {
+    /// Create a new `ReadWorldDraftTool`.
+    pub fn new(event_tx: mpsc::Sender<WsEvent>) -> Self {
+        Self { event_tx }
+    }
+}
+
+#[async_trait]
+impl Tool for ReadWorldDraftTool {
+    fn name(&self) -> &str {
+        "read_world_draft"
+    }
+
+    fn description(&self) -> &str {
+        "Read the current world info draft. Returns the draft content if it exists, or an error if no draft has been created yet."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        })
+    }
+
+    fn validate_args(&self, args: &Value) -> Result<()> {
+        validate_against_schema(&self.parameters_schema(), args)
+    }
+
+    async fn execute(&self, _args: Value) -> Result<Value> {
+        let content = read_draft(WORLD_DRAFT_PATH)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No world info draft exists. Use create_world_draft to start one."
+                )
+            })?;
+
+        // Send Preview event to frontend so the World tab shows the draft
+        let _ = self
+            .event_tx
+            .send(WsEvent::Preview {
+                tab: "world".to_string(),
+                data: Value::String(content.clone()),
+            })
+            .await;
+
+        Ok(serde_json::json!({
+            "success": true,
+            "path": WORLD_DRAFT_PATH,
+            "content": content
+        }))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ReadPostHistoryDraftTool
+// ---------------------------------------------------------------------------
+
+/// Tool that reads the current post-history draft file.
+///
+/// Returns the draft content if it exists, or an error message if no draft
+/// has been created yet.
+pub struct ReadPostHistoryDraftTool {
+    event_tx: mpsc::Sender<WsEvent>,
+}
+
+impl ReadPostHistoryDraftTool {
+    /// Create a new `ReadPostHistoryDraftTool`.
+    pub fn new(event_tx: mpsc::Sender<WsEvent>) -> Self {
+        Self { event_tx }
+    }
+}
+
+#[async_trait]
+impl Tool for ReadPostHistoryDraftTool {
+    fn name(&self) -> &str {
+        "read_post_history_draft"
+    }
+
+    fn description(&self) -> &str {
+        "Read the current post-history instructions draft. Returns the draft content if it exists, or an error if no draft has been created yet."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        })
+    }
+
+    fn validate_args(&self, args: &Value) -> Result<()> {
+        validate_against_schema(&self.parameters_schema(), args)
+    }
+
+    async fn execute(&self, _args: Value) -> Result<Value> {
+        let content = read_draft(POST_HISTORY_DRAFT_PATH)
+            .await?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No post-history draft exists. Use create_post_history_draft to start one."
+                )
+            })?;
+
+        // Send Preview event to frontend so the Post-History tab shows the draft
+        let _ = self
+            .event_tx
+            .send(WsEvent::Preview {
+                tab: "posthistory".to_string(),
+                data: Value::String(content.clone()),
+            })
+            .await;
+
+        Ok(serde_json::json!({
+            "success": true,
+            "path": POST_HISTORY_DRAFT_PATH,
+            "content": content
         }))
     }
 }
