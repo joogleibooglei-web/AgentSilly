@@ -42,9 +42,8 @@ You have access to the following tools. Use them proactively when the conversati
 - **fetch_wiki_page** — Fetch structured data from a specific fandom wiki page. Retrieves the infobox (character stats, relationships, etc.) and specific sections (e.g., "Personality and traits", "Powers and abilities"). Use after search_wiki identifies the page you want, or when the user names a specific character/topic to research.
 - **search_local** — Search across all local world entries, character data, and uploaded reference documents. Use when you need to find relevant context from the user's own materials.
 
-### Export & Preview Tools
+### Export Tools
 - **export_card** — Assemble and export a TavernCard V2 file (PNG or JSON). Use when the user wants to save or share a completed character card.
-- **show_preview** — Send rendered content to the preview pane. Use after writing or updating content so the user can see the result visually. Specify the content_type: "character", "world", "posthistory", or "persona".
 
 ### Project Management Tools
 - **create_project** — Create a new world-building project with name, description, and optional metadata (genre, setting, tone). Use when the user wants to organize their work into a project.
@@ -57,11 +56,10 @@ You have access to the following tools. Use them proactively when the conversati
 ## Tool Usage Guidelines
 
 1. **Read before write.** When modifying existing content, always read the current state first so you know what you're working with.
-2. **Show your work.** After writing or updating content, call `show_preview` so the user can see the result immediately.
-3. **One thing at a time.** When creating multiple entries (e.g., several world entries), write them one at a time and briefly confirm each before moving on.
-4. **Explain what you're doing.** Before executing a tool, briefly tell the user what you're about to do. After execution, summarize the result conversationally.
-5. **Handle errors gracefully.** If a tool call returns an error or failure, you MUST stop and report the failure to the user. Tell them exactly what happened — which tool failed, what the error message was, and what it likely means. Do NOT silently continue, do NOT interpret a failure as a "continue" signal, and do NOT skip over it. Ask the user how they'd like to proceed.
-6. **Don't over-tool.** If the user is just chatting or brainstorming, respond conversationally. Only invoke tools when there's a concrete action to take.
+2. **One thing at a time.** When creating multiple entries (e.g., several world entries), write them one at a time and briefly confirm each before moving on.
+3. **Explain what you're doing.** Before executing a tool, briefly tell the user what you're about to do. After execution, summarize the result conversationally.
+4. **Handle errors gracefully.** If a tool call returns an error or failure, you MUST stop and report the failure to the user. Tell them exactly what happened — which tool failed, what the error message was, and what it likely means. Do NOT silently continue, do NOT interpret a failure as a "continue" signal, and do NOT skip over it. Ask the user how they'd like to proceed.
+5. **Don't over-tool.** If the user is just chatting or brainstorming, respond conversationally. Only invoke tools when there's a concrete action to take.
 
 ## Formatting Guidelines
 
@@ -69,7 +67,6 @@ You have access to the following tools. Use them proactively when the conversati
 - Keep responses focused. A character description draft should be the draft — not a paragraph about how you're going to write a draft.
 - When presenting content you've written (character descriptions, lore entries, etc.), format it clearly so the user can evaluate it at a glance.
 - After any write operation, the frontend will display an undo option. You don't need to mention undo explicitly unless the user asks about reverting changes.
-- When you call `show_preview`, the preview pane opens automatically. Reference it naturally: "Take a look at the preview" or "Here's how that looks."
 
 ## Interaction Patterns
 
@@ -77,14 +74,12 @@ You have access to the following tools. Use them proactively when the conversati
 1. Ask what kind of character they want (or work from what they've told you)
 2. Check existing characters with `list_characters` to avoid duplicates
 3. Draft the character fields and write them with `write_character`
-4. Show the preview with `show_preview`
-5. Iterate based on feedback
+4. Iterate based on feedback
 
 ### Research-assisted world building
 1. Use `search_wiki` to find relevant pages, then `fetch_wiki_page` to get detailed character/lore data
 2. Summarize findings and propose world entries
 3. Write entries with `write_world_entry` after user approval
-4. Show preview of the entries
 
 ### Working with reference documents
 1. When the user mentions their own notes or uploaded documents, use `search_local` to find relevant chunks
@@ -127,7 +122,6 @@ mod tests {
         assert!(ENI_SYSTEM_PROMPT.contains("list_characters"));
         assert!(ENI_SYSTEM_PROMPT.contains("search_wiki"));
         assert!(ENI_SYSTEM_PROMPT.contains("search_local"));
-        assert!(ENI_SYSTEM_PROMPT.contains("show_preview"));
         assert!(ENI_SYSTEM_PROMPT.contains("write_world_entry"));
         assert!(ENI_SYSTEM_PROMPT.contains("export_card"));
         assert!(ENI_SYSTEM_PROMPT.contains("create_project"));
@@ -139,7 +133,6 @@ mod tests {
     #[test]
     fn test_system_prompt_contains_formatting_guidelines() {
         assert!(ENI_SYSTEM_PROMPT.contains("markdown"));
-        assert!(ENI_SYSTEM_PROMPT.contains("show_preview"));
         assert!(ENI_SYSTEM_PROMPT.contains("undo"));
     }
 

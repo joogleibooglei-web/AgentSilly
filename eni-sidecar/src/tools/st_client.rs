@@ -133,17 +133,29 @@ where
     }
 }
 
-/// Summary of a persona returned by the list endpoint.
+/// Summary of a persona returned by the list operation.
+///
+/// In SillyTavern, personas are stored in `power_user.personas` (a map of
+/// avatar_id → name) and `power_user.persona_descriptions` (a map of
+/// avatar_id → { description, title, position, depth, role, lorebook }).
+/// The avatar list comes from `/api/avatars/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonaSummary {
     /// Persona display name.
     pub name: String,
-    /// Avatar filename or identifier.
+    /// Avatar filename / identifier (the key used to look up persona data).
     #[serde(default)]
     pub avatar: String,
+    /// Optional title to differentiate personas with the same name.
+    #[serde(default)]
+    pub title: String,
 }
 
 /// Full persona data.
+///
+/// Assembled from SillyTavern's settings: `power_user.personas[avatar_id]` for
+/// the name, and `power_user.persona_descriptions[avatar_id]` for description,
+/// title, position, depth, and role.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersonaData {
     /// Persona name (required).
@@ -151,9 +163,12 @@ pub struct PersonaData {
     /// Persona description / content.
     #[serde(default)]
     pub description: String,
-    /// Avatar filename.
+    /// Avatar filename / identifier (the key in power_user maps).
     #[serde(default)]
     pub avatar: String,
+    /// Optional title to differentiate personas with the same name.
+    #[serde(default)]
+    pub title: String,
 }
 
 /// HTTP client for the SillyTavern REST API.
@@ -677,17 +692,28 @@ impl StClient {
     }
 
     // ─── Persona endpoints ───────────────────────────────────────────────
+    //
+    // SillyTavern does NOT have dedicated persona API endpoints.
+    // Personas are stored in the user settings (`power_user.personas` and
+    // `power_user.persona_descriptions`). The avatar file list comes from
+    // `/api/avatars/get`. To read/write persona data we must:
+    //   1. GET the avatar list from `/api/avatars/get`
+    //   2. GET the settings from `/api/settings/get`
+    //   3. Parse `power_user.personas` and `power_user.persona_descriptions`
+    //   4. For writes, update the settings and POST to `/api/settings/save`
 
     /// List all personas available in SillyTavern.
+    ///
+    /// Fetches the avatar file list and cross-references with settings to get
+    /// persona names and titles.
     pub async fn get_personas(&mut self) -> Result<Vec<PersonaSummary>> {
         self.ensure_csrf().await?;
 
-        let url = format!("{}/api/personas/all", self.base_url);
-        debug!(url = %url, "Fetching persona list");
+        // 1. Get avatar file list
+        let avatars_url = format!("{}/api/avatars/get", self.base_url);
+        debug!(url = %avatars_url, "Fetching persona avatar list");
 
-        // ST requires POST for this endpoint (not GET)
-        let resp = self.post_request(&url)
-            .json(&serde_json::json!({}))
+        let resp = self.post_request(&avatars_url)
             .send()
             .await
             .map_err(|e| {
@@ -705,74 +731,223 @@ impl StClient {
                 self.invalidate_connection();
             }
             anyhow::bail!(
-                "Failed to list personas: HTTP {} from {}",
+                "Failed to list persona avatars: HTTP {} from {}",
                 resp.status(),
-                url
+                avatars_url
             );
         }
 
-        let personas: Vec<PersonaSummary> = resp.json().await.context(
-            "Failed to parse persona list response from SillyTavern",
+        let avatar_list: Vec<String> = resp.json().await.context(
+            "Failed to parse avatar list response from SillyTavern",
         )?;
+
+        // 2. Get settings to resolve names and titles
+        let settings = self.get_settings_raw().await?;
+        let personas_map = settings
+            .pointer("/power_user/personas")
+            .and_then(|v| v.as_object());
+        let descriptions_map = settings
+            .pointer("/power_user/persona_descriptions")
+            .and_then(|v| v.as_object());
+
+        // 3. Build persona summaries
+        let personas: Vec<PersonaSummary> = avatar_list
+            .iter()
+            .map(|avatar_id| {
+                let name = personas_map
+                    .and_then(|m| m.get(avatar_id))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("[Unnamed Persona]")
+                    .to_string();
+                let title = descriptions_map
+                    .and_then(|m| m.get(avatar_id))
+                    .and_then(|v| v.get("title"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                PersonaSummary {
+                    name,
+                    avatar: avatar_id.clone(),
+                    title,
+                }
+            })
+            .collect();
 
         debug!(count = personas.len(), "Fetched personas");
         Ok(personas)
     }
 
-    /// Get full persona data by name.
-    pub async fn get_persona(&mut self, name: &str) -> Result<PersonaData> {
+    /// Get full persona data by avatar ID.
+    ///
+    /// Reads from the settings to get name, description, and title.
+    pub async fn get_persona(&mut self, avatar_id: &str) -> Result<PersonaData> {
         self.ensure_csrf().await?;
 
-        let url = format!("{}/api/personas/get", self.base_url);
-        debug!(url = %url, name = %name, "Fetching persona data");
+        let settings = self.get_settings_raw().await?;
 
-        let body = serde_json::json!({ "name": name });
+        let name = settings
+            .pointer("/power_user/personas")
+            .and_then(|v| v.get(avatar_id))
+            .and_then(|v| v.as_str())
+            .unwrap_or("[Unnamed Persona]")
+            .to_string();
 
-        let resp = self.post_request(&url).json(&body).send().await.map_err(|e| {
-            self.invalidate_connection();
-            anyhow::anyhow!(
-                "SillyTavern is not reachable at '{}': {}. \
-                 Please ensure SillyTavern is running and the base URL is correct.",
-                self.base_url,
-                e
-            )
-        })?;
+        let descriptor = settings
+            .pointer("/power_user/persona_descriptions")
+            .and_then(|v| v.get(avatar_id));
+
+        let description = descriptor
+            .and_then(|v| v.get("description"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let title = descriptor
+            .and_then(|v| v.get("title"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        Ok(PersonaData {
+            name,
+            description,
+            avatar: avatar_id.to_string(),
+            title,
+        })
+    }
+
+    /// Find a persona by name (and optionally title) and return its data.
+    ///
+    /// Since personas are keyed by avatar_id internally, this searches through
+    /// all personas to find one matching the given name. If multiple personas
+    /// share the same name, the title is used to disambiguate.
+    pub async fn find_persona_by_name(&mut self, name: &str, title: Option<&str>) -> Result<PersonaData> {
+        let personas = self.get_personas().await?;
+
+        let matches: Vec<&PersonaSummary> = personas
+            .iter()
+            .filter(|p| p.name.eq_ignore_ascii_case(name))
+            .collect();
+
+        if matches.is_empty() {
+            anyhow::bail!("No persona found with name '{}'", name);
+        }
+
+        // If there's a title filter, use it to disambiguate
+        let target = if let Some(t) = title {
+            matches
+                .iter()
+                .find(|p| p.title.eq_ignore_ascii_case(t))
+                .or(matches.first())
+                .unwrap()
+        } else {
+            matches.first().unwrap()
+        };
+
+        self.get_persona(&target.avatar).await
+    }
+
+    /// Edit an existing persona in SillyTavern.
+    ///
+    /// Updates the persona name, description, and/or title in the settings,
+    /// then saves the settings back to SillyTavern.
+    pub async fn edit_persona(&mut self, data: &PersonaData) -> Result<()> {
+        self.ensure_csrf().await?;
+
+        // 1. Get current settings
+        let mut settings = self.get_settings_raw().await?;
+
+        // 2. Update persona name in power_user.personas
+        if let Some(personas) = settings
+            .pointer_mut("/power_user/personas")
+            .and_then(|v| v.as_object_mut())
+        {
+            personas.insert(
+                data.avatar.clone(),
+                serde_json::Value::String(data.name.clone()),
+            );
+        }
+
+        // 3. Update persona description and title in power_user.persona_descriptions
+        if let Some(descriptions) = settings
+            .pointer_mut("/power_user/persona_descriptions")
+            .and_then(|v| v.as_object_mut())
+        {
+            let entry = descriptions
+                .entry(data.avatar.clone())
+                .or_insert_with(|| serde_json::json!({}));
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert(
+                    "description".to_string(),
+                    serde_json::Value::String(data.description.clone()),
+                );
+                obj.insert(
+                    "title".to_string(),
+                    serde_json::Value::String(data.title.clone()),
+                );
+            }
+        }
+
+        // 4. Save settings back to SillyTavern
+        self.save_settings_raw(&settings).await?;
+
+        debug!(avatar = %data.avatar, name = %data.name, "Persona edited");
+        Ok(())
+    }
+
+    /// Fetch the raw settings JSON from SillyTavern.
+    async fn get_settings_raw(&mut self) -> Result<serde_json::Value> {
+        let url = format!("{}/api/settings/get", self.base_url);
+        debug!(url = %url, "Fetching settings");
+
+        let resp = self.post_request(&url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| {
+                self.invalidate_connection();
+                anyhow::anyhow!(
+                    "SillyTavern is not reachable at '{}': {}",
+                    self.base_url,
+                    e
+                )
+            })?;
 
         if !resp.status().is_success() {
             if resp.status().as_u16() == 403 {
                 self.invalidate_connection();
             }
             anyhow::bail!(
-                "Failed to get persona '{}': HTTP {} from {}",
-                name,
+                "Failed to get settings: HTTP {} from {}",
                 resp.status(),
                 url
             );
         }
 
-        let persona: PersonaData = resp.json().await.with_context(|| {
-            format!("Failed to parse persona data for '{name}' from SillyTavern")
-        })?;
+        let settings: serde_json::Value = resp.json().await.context(
+            "Failed to parse settings response from SillyTavern",
+        )?;
 
-        Ok(persona)
+        Ok(settings)
     }
 
-    /// Edit an existing persona in SillyTavern.
-    pub async fn edit_persona(&mut self, data: &PersonaData) -> Result<()> {
-        self.ensure_csrf().await?;
+    /// Save the raw settings JSON back to SillyTavern.
+    async fn save_settings_raw(&mut self, settings: &serde_json::Value) -> Result<()> {
+        let url = format!("{}/api/settings/save", self.base_url);
+        debug!(url = %url, "Saving settings");
 
-        let url = format!("{}/api/personas/edit", self.base_url);
-        debug!(url = %url, name = %data.name, "Editing persona");
-
-        let resp = self.post_request(&url).json(data).send().await.map_err(|e| {
-            self.invalidate_connection();
-            anyhow::anyhow!(
-                "SillyTavern is not reachable at '{}': {}. \
-                 Please ensure SillyTavern is running and the base URL is correct.",
-                self.base_url,
-                e
-            )
-        })?;
+        let resp = self.post_request(&url)
+            .json(settings)
+            .send()
+            .await
+            .map_err(|e| {
+                self.invalidate_connection();
+                anyhow::anyhow!(
+                    "SillyTavern is not reachable at '{}': {}",
+                    self.base_url,
+                    e
+                )
+            })?;
 
         if !resp.status().is_success() {
             if resp.status().as_u16() == 403 {
@@ -781,14 +956,13 @@ impl StClient {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
             anyhow::bail!(
-                "Failed to edit persona '{}': HTTP {} — {}",
-                data.name,
+                "Failed to save settings: HTTP {} — {}",
                 status,
                 body
             );
         }
 
-        debug!(name = %data.name, "Persona edited");
+        debug!("Settings saved");
         Ok(())
     }
 

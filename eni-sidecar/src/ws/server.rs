@@ -26,7 +26,7 @@ use crate::tools::{
     self, ToolDispatcher, ExportCardTool, ListCharactersTool, ReadCharacterTool,
     WriteCharacterTool, ReadPersonaTool, WritePersonaTool, ListPersonasTool,
     ReadPostHistoryTool, WritePostHistoryTool, ReadWorldEntriesTool, WriteWorldEntryTool,
-    SearchLocalTool, SearchWikiTool, FetchWikiPageTool, ShowPreviewTool, CreateProjectTool, ManageTasksTool,
+    SearchLocalTool, SearchWikiTool, FetchWikiPageTool, CreateProjectTool, ManageTasksTool,
     UndoChangeTool, ListVersionsTool, StClient,
 };
 use crate::versioning::VersionStore;
@@ -549,7 +549,6 @@ async fn handle_user_message(
             dispatcher.register(Box::new(SearchLocalTool::new(Arc::clone(&search_index))));
             dispatcher.register(Box::new(SearchWikiTool::new(None)));
             dispatcher.register(Box::new(FetchWikiPageTool::new(None)));
-            dispatcher.register(Box::new(ShowPreviewTool::new(event_tx.clone())));
             dispatcher.register(Box::new(CreateProjectTool::new(Arc::clone(&tool_db))));
             dispatcher.register(Box::new(ManageTasksTool::new(Arc::clone(&tool_db))));
             dispatcher.register(Box::new(UndoChangeTool::new(

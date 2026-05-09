@@ -5,6 +5,8 @@
   interface PersonaData {
     name?: string;
     description?: string;
+    title?: string;
+    avatar?: string;
     tags?: string[];
     relationship?: string;
   }
@@ -25,6 +27,7 @@
     if (!persona) return '';
     const parts: string[] = [];
     if (persona.name) parts.push(`Name: ${persona.name}`);
+    if (persona.title) parts.push(`Title: ${persona.title}`);
     if (persona.tags?.length) parts.push(`Tags: ${persona.tags.join(', ')}`);
     if (persona.description) parts.push(`\nDescription:\n${persona.description}`);
     if (persona.relationship) parts.push(`\nRelationship:\n${persona.relationship}`);
@@ -61,6 +64,9 @@
         <div class="preview-avatar">{getInitial(persona.name)}</div>
         <div class="preview-meta">
           <h2 class="persona-name">{persona.name || 'Unnamed Persona'}</h2>
+          {#if persona.title}
+            <span class="persona-title">{persona.title}</span>
+          {/if}
           {#if persona.tags && persona.tags.length > 0}
             <div class="tag-list">
               {#each persona.tags as tag}
@@ -146,8 +152,16 @@
   .persona-name {
     font-size: 15px;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     color: var(--text);
+  }
+
+  .persona-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-bottom: 4px;
+    display: block;
   }
 
   .tag-list {

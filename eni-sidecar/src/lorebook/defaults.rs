@@ -24,6 +24,11 @@ pub fn build_default_lorebook() -> Lorebook {
         )
         .with_keywords(vec![
             "character card",
+            "character cards",
+            "character card instructions",
+            "character card format",
+            "character card schema",
+            "character formatting",
             "build a character",
             "create a character",
             "write a character",
@@ -36,9 +41,11 @@ pub fn build_default_lorebook() -> Lorebook {
             "edit NPC",
             "character personality",
             "character backstory",
+            "card instructions",
+            "card format",
         ])
         .with_priority(10)
-        .with_scan_depth(3)
+        .with_scan_depth(5)
         .with_whole_word(true),
     );
 
@@ -58,10 +65,13 @@ pub fn build_default_lorebook() -> Lorebook {
             "edit persona",
             "build persona",
             "persona card",
+            "persona cards",
             "persona description",
+            "persona instructions",
+            "persona format",
         ])
         .with_priority(10)
-        .with_scan_depth(3)
+        .with_scan_depth(5)
         .with_whole_word(true),
     );
 
@@ -90,9 +100,11 @@ pub fn build_default_lorebook() -> Lorebook {
             "geography",
             "faction",
             "factions",
+            "world info instructions",
+            "world info format",
         ])
         .with_priority(10)
-        .with_scan_depth(3)
+        .with_scan_depth(5)
         .with_whole_word(true),
     );
 
@@ -120,9 +132,11 @@ pub fn build_default_lorebook() -> Lorebook {
             "write post-history",
             "create post-history",
             "edit post-history",
+            "post-history format",
+            "post-history instructions",
         ])
         .with_priority(10)
-        .with_scan_depth(3)
+        .with_scan_depth(5)
         .with_whole_word(true),
     );
 
@@ -132,14 +146,7 @@ pub fn build_default_lorebook() -> Lorebook {
 // ─── Extension Content ───────────────────────────────────────────────────────
 // Full JSON prompt extensions, injected verbatim into ENI's context.
 
-const CHARACTER_CARD_CONTENT: &str = r#"## Character Card Extension
-
-**Output destination:** The `description` field of a character in SillyTavern.
-
-Follow these instructions when creating or editing a character card (NPC).
-
-```json
-{
+const CHARACTER_CARD_CONTENT: &str = r#"{
   "character_cards": {
     "description": "Rules and format specific to creating character cards — personas (played by the user) and NPCs (played by the AI). These extend the core thinking protocol and format rules.",
     "thinking_steps": {
@@ -191,17 +198,9 @@ Follow these instructions when creating or editing a character card (NPC).
       "dislikes": "Required. Things the character avoids, hates, or is repelled by."
     }
   }
-}
-```"#;
+}"#;
 
-const PERSONA_CARD_CONTENT: &str = r#"## Persona Card Extension
-
-**Output destination:** The `description` field of a persona in SillyTavern.
-
-Follow these instructions when creating or editing a persona (the user's character).
-
-```json
-{
+const PERSONA_CARD_CONTENT: &str = r#"{
   "persona_cards": {
     "description": "Rules and format specific to creating persona cards. Persona cards represent the user's character and must be treated as such — the AI never speaks for, overrides, or assumes actions on behalf of a persona.",
     "format_rules": {
@@ -227,29 +226,9 @@ Follow these instructions when creating or editing a persona (the user's charact
       "skills": "Required. What the persona is competent at."
     }
   }
-}
-```"#;
+}"#;
 
-const WORLD_INFO_CONTENT: &str = r#"## World Information Extension
-
-**Output destination:** The `description` field of a character in SillyTavern, **prepended before** the character-specific content.
-
-When writing world information, the output goes at the TOP of the character's description field, before any character-specific content. Structure it as:
-
-```
-[World information content here]
-
----
-
-[Character-specific content below]
-```
-
-The `---` separator clearly delineates world context from character identity. The AI reads the description top-to-bottom, so world context establishes the setting before the character is introduced within it.
-
-Follow these instructions when creating or editing world information.
-
-```json
-{
+const WORLD_INFO_CONTENT: &str = r#"{
   "world_information": {
     "description": "Rules and format specific to creating world information documents. These provide the AI with persistent global context about the setting — history, geography, politics, factions, calendar systems, cultural norms, and any other world-level detail that affects how the AI narrates and makes decisions. Unlike lorebooks, world information is not keyword-triggered. It is always present in context. These extend the core thinking protocol and format rules.",
     "thinking_steps": {
@@ -266,17 +245,9 @@ Follow these instructions when creating or editing world information.
       "temporal_grounding": "Historical entries must connect to the present. Every past event included should have a visible consequence in the current setting — a political tension, a cultural norm, a scar on the landscape. History without present-day relevance is dead weight."
     }
   }
-}
-```"#;
+}"#;
 
-const POST_HISTORY_CONTENT: &str = r#"## Post-History Instructions Extension
-
-**Output destination:** The `post_history_instructions` field of a character in SillyTavern.
-
-Follow these instructions when creating or editing a post-history instructions block.
-
-```json
-{
+const POST_HISTORY_CONTENT: &str = r#"{
   "post_history_instructions": {
     "description": "Rules and format specific to creating post-history instruction blocks. These are the final system-level instructions sent to the AI before it generates a response. They enforce response structure, world-state tracking, and narrative progression. These extend the core thinking protocol and format rules.",
     "thinking_steps": {
@@ -297,7 +268,7 @@ Follow these instructions when creating or editing a post-history instructions b
       "timeline_events": "Timeline events are future checkpoints the AI must evaluate when the narrative reaches them. Each event is broken into four prefixed keys: timeline_N_trigger (when to evaluate), timeline_N_check (concrete criteria to evaluate against — must be binary, not vibes), timeline_N_outcome_met (what happens if conditions are satisfied), timeline_N_outcome_not_met (what happens if conditions are not satisfied, typically the canon or default outcome). Multiple events are numbered chronologically."
     },
     "reference_example": {
-      "description": "A post-history instruction block for a scenario set in a school drama with time progression, currency tracking, response length rules, ending conventions, and a major branching timeline event.",
+      "description": "A post-history instruction block for a scenario set in a school drama with time progression, currency tracking, response length rules, ending conventions, and a major branching timeline event. Note how length rules are tied to specific scene contexts, how ending conventions give the AI a clear closing beat per scene type, and how the drafting instruction forces the AI to plan before writing.",
       "header_format": "`📍 {Location} | 🕐 {HH:MM AM/PM} | 🗓️ {Date}`",
       "header_time_logic": "Use HH:MM AM/PM format. Advance time naturally based on scene activity. Do not skip large chunks of time unless a timeskip is narratively justified and acknowledged.",
       "header_date_logic": "Increment date (+1 day) when passing midnight. Do not skip days unless a timeskip is narratively justified and acknowledged.",
@@ -318,5 +289,4 @@ Follow these instructions when creating or editing a post-history instructions b
       "timeline_1_outcome_met": "April 22 passes safely or a close call occurs. Timeline is broken. Rachel survives."
     }
   }
-}
-```"#;
+}"#;

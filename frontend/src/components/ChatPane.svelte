@@ -81,7 +81,7 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      if (isStreaming) return;
+      if (agentStatus !== 'idle') return;
       handleSend();
     }
   }
@@ -194,9 +194,9 @@
         bind:value={inputValue}
         onkeydown={handleKeydown}
         oninput={handleInput}
-        disabled={isStreaming || connectionState !== 'connected'}
+        disabled={agentStatus !== 'idle' || connectionState !== 'connected'}
       ></textarea>
-      {#if isStreaming}
+      {#if agentStatus !== 'idle'}
         <button class="stop-btn" onclick={handleStop}>Stop</button>
       {:else}
         <button class="send-btn" onclick={handleSend} disabled={!inputValue.trim() || connectionState !== 'connected'}>Send</button>

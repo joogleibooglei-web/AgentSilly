@@ -144,16 +144,27 @@ impl LlmClient {
         let mut text_content = String::new();
         let mut tool_accumulators: Vec<ToolCallAccumulator> = Vec::new();
         let mut has_tool_calls = false;
+        let mut consecutive_errors: u32 = 0;
+        const MAX_CONSECUTIVE_ERRORS: u32 = 3;
 
         // Convert the response body into an SSE event stream
         let mut stream = response.bytes_stream().eventsource();
 
         while let Some(event_result) = stream.next().await {
             let event = match event_result {
-                Ok(ev) => ev,
+                Ok(ev) => {
+                    consecutive_errors = 0;
+                    ev
+                }
                 Err(e) => {
-                    // eventsource-stream errors are typically connection issues
-                    warn!(error = %e, "SSE stream error");
+                    consecutive_errors += 1;
+                    if consecutive_errors <= 1 {
+                        warn!(error = %e, "SSE stream error");
+                    }
+                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                        warn!("SSE stream: {} consecutive errors, terminating stream", consecutive_errors);
+                        break;
+                    }
                     continue;
                 }
             };
@@ -508,11 +519,11 @@ mod tests {
             // First tool call starts
             r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_001","type":"function","function":{"name":"write_character","arguments":""}}]},"finish_reason":null}]}"#,
             // Second tool call starts
-            r#"{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_002","type":"function","function":{"name":"show_preview","arguments":""}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_002","type":"function","function":{"name":"read_character","arguments":""}}]},"finish_reason":null}]}"#,
             // First tool call arguments
             r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"name\":\"Kael\"}"}}]},"finish_reason":null}]}"#,
             // Second tool call arguments
-            r#"{"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"type\":\"character\"}"}}]},"finish_reason":null}]}"#,
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"name\":\"Kael\"}"}}]},"finish_reason":null}]}"#,
             // Finish
             r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
             "[DONE]",
@@ -521,7 +532,7 @@ mod tests {
         let port = start_mock_server(sse).await;
         let client = LlmClient::new(test_profile(port));
 
-        let messages = vec![ChatMessage::user("Create and preview")];
+        let messages = vec![ChatMessage::user("Create and read")];
         let result = client
             .chat_completion_stream(&messages, &[], None, None)
             .await
@@ -536,8 +547,8 @@ mod tests {
                 assert_eq!(calls[0].arguments, serde_json::json!({"name": "Kael"}));
 
                 assert_eq!(calls[1].id, "call_002");
-                assert_eq!(calls[1].name, "show_preview");
-                assert_eq!(calls[1].arguments, serde_json::json!({"type": "character"}));
+                assert_eq!(calls[1].name, "read_character");
+                assert_eq!(calls[1].arguments, serde_json::json!({"name": "Kael"}));
             }
             LlmResponse::Text(_) => panic!("Expected ToolCalls response, got Text"),
         }

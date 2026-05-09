@@ -1,5 +1,10 @@
 //! Tools: read_persona, write_persona, list_personas — manage user personas in SillyTavern.
 //!
+//! SillyTavern stores personas in user settings (`power_user.personas` and
+//! `power_user.persona_descriptions`), keyed by avatar filename. These tools
+//! abstract that away — the user interacts by persona name (and optionally title
+//! to disambiguate personas with the same name).
+//!
 //! `write_persona` snapshots the previous state via VersionStore before writing,
 //! and sends an `UndoAvailable` event to the frontend after a successful write.
 
@@ -17,8 +22,9 @@ use crate::versioning::VersionStore;
 
 // ─── ReadPersonaTool ────────────────────────────────────────────────────────
 
-/// Tool that reads a user persona from SillyTavern via the ST REST API.
+/// Tool that reads a user persona from SillyTavern.
 ///
+/// Looks up the persona by name (and optionally title to disambiguate).
 /// Automatically sends a preview event to the frontend so the Persona tab updates.
 pub struct ReadPersonaTool {
     st_client: Arc<Mutex<StClient>>,
@@ -39,7 +45,7 @@ impl Tool for ReadPersonaTool {
     }
 
     fn description(&self) -> &str {
-        "Read the active user persona from SillyTavern"
+        "Read a user persona from SillyTavern by name. If multiple personas share the same name, use the title parameter to disambiguate."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -49,6 +55,10 @@ impl Tool for ReadPersonaTool {
                 "name": {
                     "type": "string",
                     "description": "The persona name to look up"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title to disambiguate personas with the same name"
                 }
             },
             "required": ["name"]
@@ -64,9 +74,11 @@ impl Tool for ReadPersonaTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
 
+        let title = args.get("title").and_then(|v| v.as_str());
+
         let persona = {
             let mut client = self.st_client.lock().await;
-            client.get_persona(name).await?
+            client.find_persona_by_name(name, title).await?
         };
 
         let result = serde_json::to_value(&persona)?;
@@ -117,7 +129,7 @@ impl Tool for WritePersonaTool {
     }
 
     fn description(&self) -> &str {
-        "Update a user persona in SillyTavern"
+        "Update a user persona in SillyTavern. Looks up by name (and optionally title to disambiguate). Only provided fields are updated."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -126,11 +138,19 @@ impl Tool for WritePersonaTool {
             "properties": {
                 "name": {
                     "type": "string",
-                    "description": "The persona name to update"
+                    "description": "The persona name to update (used for lookup)"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title to disambiguate personas with the same name, or to set/update the title"
                 },
                 "description": {
                     "type": "string",
-                    "description": "The persona description / content"
+                    "description": "The persona description / content to set"
+                },
+                "new_name": {
+                    "type": "string",
+                    "description": "Optional new name to rename the persona to"
                 }
             },
             "required": ["name"]
@@ -146,26 +166,35 @@ impl Tool for WritePersonaTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: name"))?;
 
+        let title_for_lookup = args.get("title").and_then(|v| v.as_str());
+
         // 1. Read current persona state from SillyTavern
         let current_persona = {
             let mut client = self.st_client.lock().await;
-            client.get_persona(name).await?
+            client.find_persona_by_name(name, title_for_lookup).await?
         };
 
         // 2. Snapshot the current state for undo
         let current_data = serde_json::to_value(&current_persona)?;
+        let entity_id = &current_persona.avatar;
         self.version_store.snapshot(
             "persona",
-            name,
+            entity_id,
             &current_data,
             "Before write_persona",
         )?;
 
         // 3. Merge provided fields into the existing persona data
-        let mut updated = current_persona;
+        let mut updated = current_persona.clone();
 
         if let Some(v) = args.get("description").and_then(|v| v.as_str()) {
             updated.description = v.to_string();
+        }
+        if let Some(v) = args.get("new_name").and_then(|v| v.as_str()) {
+            updated.name = v.to_string();
+        }
+        if let Some(v) = args.get("title").and_then(|v| v.as_str()) {
+            updated.title = v.to_string();
         }
 
         // 4. Write the updated persona back to SillyTavern
@@ -177,7 +206,7 @@ impl Tool for WritePersonaTool {
         // 5. Send UndoAvailable event to frontend
         let _ = self.event_tx.send(WsEvent::UndoAvailable {
             entity_type: "persona".to_string(),
-            entity_id: name.to_string(),
+            entity_id: entity_id.to_string(),
             summary: "Persona updated".to_string(),
         }).await;
 
@@ -191,15 +220,19 @@ impl Tool for WritePersonaTool {
         // 7. Return success
         Ok(serde_json::json!({
             "success": true,
-            "persona": name,
-            "message": "Persona updated"
+            "persona": updated.name,
+            "avatar": updated.avatar,
+            "title": updated.title,
+            "message": format!("Persona '{}' updated", updated.name)
         }))
     }
 }
 
 // ─── ListPersonasTool ───────────────────────────────────────────────────────
 
-/// Tool that lists all user personas from SillyTavern via the ST REST API.
+/// Tool that lists all user personas from SillyTavern.
+///
+/// Returns name, avatar ID, and title for each persona.
 pub struct ListPersonasTool {
     st_client: Arc<Mutex<StClient>>,
 }
@@ -218,7 +251,7 @@ impl Tool for ListPersonasTool {
     }
 
     fn description(&self) -> &str {
-        "List all available user personas in SillyTavern"
+        "List all available user personas in SillyTavern. Returns name, avatar ID, and title for each."
     }
 
     fn parameters_schema(&self) -> Value {
@@ -255,6 +288,10 @@ mod tests {
                 "name": {
                     "type": "string",
                     "description": "The persona name to look up"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title to disambiguate personas with the same name"
                 }
             },
             "required": ["name"]
@@ -262,6 +299,9 @@ mod tests {
 
         let valid = serde_json::json!({"name": "Default"});
         assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let valid_with_title = serde_json::json!({"name": "Default", "title": "Main"});
+        assert!(validate_against_schema(&schema, &valid_with_title).is_ok());
 
         let invalid = serde_json::json!({});
         assert!(validate_against_schema(&schema, &invalid).is_err());
@@ -276,9 +316,17 @@ mod tests {
                     "type": "string",
                     "description": "The persona name to update"
                 },
+                "title": {
+                    "type": "string",
+                    "description": "Optional title"
+                },
                 "description": {
                     "type": "string",
                     "description": "The persona description / content"
+                },
+                "new_name": {
+                    "type": "string",
+                    "description": "Optional new name"
                 }
             },
             "required": ["name"]
@@ -289,6 +337,9 @@ mod tests {
 
         let valid_no_desc = serde_json::json!({"name": "Default"});
         assert!(validate_against_schema(&schema, &valid_no_desc).is_ok());
+
+        let valid_with_title = serde_json::json!({"name": "Default", "title": "Alt", "description": "New desc"});
+        assert!(validate_against_schema(&schema, &valid_with_title).is_ok());
 
         let invalid = serde_json::json!({"description": "No name"});
         assert!(validate_against_schema(&schema, &invalid).is_err());
