@@ -121,6 +121,7 @@ impl StClient {
         let configured_url = config.base_url.trim_end_matches('/').to_string();
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
+            .cookie_store(true)
             .build()
             .context("Failed to build HTTP client")?;
 

@@ -378,8 +378,10 @@ export class WsClient {
 
       case 'config_updated':
         if (msg.key === 'model_profile') {
-          // Model switch confirmed by sidecar — re-fetch config to sync state
+          // Model profile changed externally — re-fetch config to sync state
           this.fetchConfig();
+        } else if (msg.key === 'model_switched') {
+          // Model switch confirmed by sidecar — do NOT re-fetch (would overwrite user's selection)
         } else {
           updateConfig(msg.key, null);
         }

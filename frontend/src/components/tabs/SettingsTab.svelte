@@ -171,6 +171,9 @@
   function handleModelChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
     model = select.value;
+    // Persist model choice to sidecar DB and switch active model
+    const ws = getWsClient();
+    ws.sendSwitchModel(model);
     handleProfileFieldBlur('model', model);
   }
 

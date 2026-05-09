@@ -598,25 +598,57 @@ async fn handle_cancel(cancel_token: &Arc<tokio::sync::Mutex<CancellationToken>>
 
 /// Handle a model switch request.
 async fn handle_switch_model(profile_name: &str, state: &Arc<AppState>, ws_sender: &WebSocketSender) {
-    match state.config.model_by_name(profile_name) {
-        Some(profile) => {
-            state.llm_client.switch_profile(profile.clone()).await;
-            info!(profile = %profile_name, "Switched model profile");
-            let _ = ws_sender
-                .send(WsEvent::ConfigUpdated {
-                    key: "model_profile".to_string(),
-                })
-                .await;
-        }
-        None => {
-            warn!(profile = %profile_name, "Unknown model profile requested");
-            let _ = ws_sender
-                .send(WsEvent::Error {
-                    message: format!("Unknown model profile: {}", profile_name),
-                })
-                .await;
-        }
+    // The frontend sends the model name (e.g., "claude-opus-4.6") from the dropdown.
+    // We need to persist this choice to the database so it's used on the next agent turn.
+    // First check if it matches a named profile in the TOML config.
+    if let Some(profile) = state.config.model_by_name(profile_name) {
+        // Full profile match — persist all fields
+        {
+            let db = state.db.lock().unwrap();
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.model", serde_json::to_string(&profile.model).unwrap_or_default()],
+            );
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.baseUrl", serde_json::to_string(&profile.base_url).unwrap_or_default()],
+            );
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.apiKey", serde_json::to_string(&profile.api_key).unwrap_or_default()],
+            );
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.temperature", profile.temperature.to_string()],
+            );
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.maxTokens", profile.max_tokens.to_string()],
+            );
+        } // MutexGuard dropped here before await
+
+        state.llm_client.switch_profile(profile.clone()).await;
+        info!(profile = %profile_name, "Switched to named model profile");
+    } else {
+        // Not a named profile — just update the model field in the DB.
+        // This handles the case where the user picks a model from the /models endpoint
+        // dropdown (e.g., "claude-opus-4.6") that isn't a full TOML profile.
+        {
+            let db = state.db.lock().unwrap();
+            let _ = db.conn().execute(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                rusqlite::params!["model_profile.model", serde_json::to_string(profile_name).unwrap_or_default()],
+            );
+        } // MutexGuard dropped here
+        info!(model = %profile_name, "Switched model (persisted to DB)");
     }
+
+    // Confirm the switch to the frontend (do NOT trigger fetchConfig re-fetch)
+    let _ = ws_sender
+        .send(WsEvent::ConfigUpdated {
+            key: "model_switched".to_string(),
+        })
+        .await;
 }
 
 /// Handle a new conversation request — archive current and reset.
