@@ -74,6 +74,7 @@ impl LlmClient {
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
         on_token: Option<&TokenCallback>,
+        on_thinking: Option<&ThinkingCallback>,
     ) -> Result<LlmResponse> {
         // Snapshot the active profile for this request
         let profile = self.active_profile.read().await.clone();
@@ -125,7 +126,7 @@ impl LlmClient {
         }
 
         // Parse the SSE stream
-        self.process_sse_stream(response, on_token).await
+        self.process_sse_stream(response, on_token, on_thinking).await
     }
 
     /// Parse the SSE event stream from the chat completion response.
@@ -136,6 +137,7 @@ impl LlmClient {
         &self,
         response: reqwest::Response,
         on_token: Option<&TokenCallback>,
+        on_thinking: Option<&ThinkingCallback>,
     ) -> Result<LlmResponse> {
         use eventsource_stream::Eventsource;
 
@@ -185,6 +187,13 @@ impl LlmClient {
                     // Relay token to callback
                     if let Some(cb) = on_token {
                         cb(content);
+                    }
+                }
+
+                // Accumulate reasoning/thinking content
+                if let Some(ref reasoning) = choice.delta.reasoning_content {
+                    if let Some(cb) = on_thinking {
+                        cb(reasoning);
                     }
                 }
 
@@ -368,7 +377,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Hi")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -401,7 +410,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Count")];
         let result = client
-            .chat_completion_stream(&messages, &[], Some(&callback))
+            .chat_completion_stream(&messages, &[], Some(&callback), None)
             .await
             .unwrap();
 
@@ -432,7 +441,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Hi")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -470,7 +479,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Read Kael's description")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -514,7 +523,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Create and preview")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -550,7 +559,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Do something")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -584,7 +593,7 @@ mod tests {
 
         let client = LlmClient::new(test_profile(port));
         let messages = vec![ChatMessage::user("Hi")];
-        let result = client.chat_completion_stream(&messages, &[], None).await;
+        let result = client.chat_completion_stream(&messages, &[], None, None).await;
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -599,7 +608,7 @@ mod tests {
 
         let client = LlmClient::new(test_profile(port));
         let messages = vec![ChatMessage::user("Hi")];
-        let result = client.chat_completion_stream(&messages, &[], None).await;
+        let result = client.chat_completion_stream(&messages, &[], None, None).await;
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -625,7 +634,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Hi")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -653,7 +662,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Hi")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 
@@ -680,7 +689,7 @@ mod tests {
 
         let messages = vec![ChatMessage::user("Hi")];
         let result = client
-            .chat_completion_stream(&messages, &[], None)
+            .chat_completion_stream(&messages, &[], None, None)
             .await
             .unwrap();
 

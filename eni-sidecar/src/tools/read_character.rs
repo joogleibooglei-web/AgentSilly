@@ -6,21 +6,25 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::Mutex;
+use tracing::debug;
 
 use super::dispatcher::{validate_against_schema, Tool};
 use super::st_client::StClient;
+use crate::agent::events::WsEvent;
 
 /// Tool that reads character data from SillyTavern via the ST REST API.
 ///
 /// Supports returning all fields or a filtered subset specified by the caller.
+/// Automatically sends a preview event to the frontend so the Character tab updates.
 pub struct ReadCharacterTool {
     st_client: Arc<Mutex<StClient>>,
+    event_tx: tokio::sync::mpsc::Sender<WsEvent>,
 }
 
 impl ReadCharacterTool {
-    /// Create a new `ReadCharacterTool` with a shared ST client.
-    pub fn new(st_client: Arc<Mutex<StClient>>) -> Self {
-        Self { st_client }
+    /// Create a new `ReadCharacterTool` with a shared ST client and event sender.
+    pub fn new(st_client: Arc<Mutex<StClient>>, event_tx: tokio::sync::mpsc::Sender<WsEvent>) -> Self {
+        Self { st_client, event_tx }
     }
 }
 
@@ -82,7 +86,7 @@ impl Tool for ReadCharacterTool {
         let full_value = serde_json::to_value(&character)?;
 
         // If fields filter is specified, return only those fields
-        if let Some(fields_array) = args.get("fields").and_then(|f| f.as_array()) {
+        let result = if let Some(fields_array) = args.get("fields").and_then(|f| f.as_array()) {
             let fields: Vec<&str> = fields_array
                 .iter()
                 .filter_map(|v| v.as_str())
@@ -90,25 +94,36 @@ impl Tool for ReadCharacterTool {
 
             if fields.is_empty() {
                 // Empty fields array — return all fields
-                return Ok(full_value);
-            }
+                full_value.clone()
+            } else {
+                let full_obj = full_value
+                    .as_object()
+                    .ok_or_else(|| anyhow::anyhow!("Character data is not a JSON object"))?;
 
-            let full_obj = full_value
-                .as_object()
-                .ok_or_else(|| anyhow::anyhow!("Character data is not a JSON object"))?;
-
-            let mut filtered = serde_json::Map::new();
-            for field in &fields {
-                if let Some(value) = full_obj.get(*field) {
-                    filtered.insert(field.to_string(), value.clone());
+                let mut filtered = serde_json::Map::new();
+                for field in &fields {
+                    if let Some(value) = full_obj.get(*field) {
+                        filtered.insert(field.to_string(), value.clone());
+                    }
                 }
-            }
 
-            Ok(Value::Object(filtered))
+                Value::Object(filtered)
+            }
         } else {
             // No fields filter — return everything
-            Ok(full_value)
-        }
+            full_value.clone()
+        };
+
+        // Send preview event to frontend so the Character tab updates automatically
+        debug!("Sending character preview event to frontend");
+        let _ = self.event_tx
+            .send(WsEvent::Preview {
+                tab: "character".to_string(),
+                data: full_value,
+            })
+            .await;
+
+        Ok(result)
     }
 }
 

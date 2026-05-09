@@ -146,6 +146,10 @@ pub struct ToolCall {
 /// The client calls this with each text delta so the caller can relay to the frontend.
 pub type TokenCallback = Box<dyn Fn(&str) + Send + Sync>;
 
+/// A callback for receiving streamed thinking/reasoning tokens.
+/// The client calls this with each reasoning delta so the caller can relay to the frontend.
+pub type ThinkingCallback = Box<dyn Fn(&str) + Send + Sync>;
+
 // --- SSE response types (internal, for parsing the API response) ---
 
 /// A single SSE chunk from the streaming chat completion response.
@@ -163,6 +167,8 @@ pub(crate) struct StreamChoice {
 #[derive(Debug, Deserialize)]
 pub(crate) struct StreamDelta {
     pub content: Option<String>,
+    /// Reasoning/thinking content (used by DeepSeek, OpenRouter, etc.)
+    pub reasoning_content: Option<String>,
     pub tool_calls: Option<Vec<StreamToolCallDelta>>,
 }
 

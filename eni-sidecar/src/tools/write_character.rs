@@ -244,7 +244,18 @@ impl Tool for WriteCharacterTool {
             client.edit_character(&avatar_url, &update_value).await?;
         }
 
-        // 6. Send UndoAvailable event to frontend
+        // 6. Re-read the updated character and send preview event to frontend
+        let updated_character = {
+            let mut client = self.st_client.lock().await;
+            client.get_character(&avatar_url).await?
+        };
+        let updated_data = serde_json::to_value(&updated_character)?;
+        let _ = self.event_tx.send(WsEvent::Preview {
+            tab: "character".to_string(),
+            data: updated_data,
+        }).await;
+
+        // 7. Send UndoAvailable event to frontend
         let summary = format!("Character updated: {}", updated_fields.join(", "));
         let _ = self.event_tx.send(WsEvent::UndoAvailable {
             entity_type: "character".to_string(),
@@ -252,7 +263,7 @@ impl Tool for WriteCharacterTool {
             summary: summary.clone(),
         }).await;
 
-        // 6. Return success with summary
+        // 8. Return success with summary
         Ok(serde_json::json!({
             "success": true,
             "character": name,

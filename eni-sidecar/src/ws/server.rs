@@ -371,11 +371,29 @@ async fn handle_user_message(
                 .unwrap_or_default()
         };
 
-        // Build a fresh AgentContext for this turn using ENI's base personality prompt
+        // Build a fresh AgentContext for this turn using ENI's base personality prompt.
+        // Read max_tokens from the DB (user-configured via UI) first, then fall back
+        // to the TOML config, then hardcoded 4096.
+        let context_max_tokens = {
+            let db_guard = state.db.lock().unwrap();
+            db_guard
+                .conn()
+                .query_row(
+                    "SELECT value FROM config WHERE key = 'model_profile.maxTokens'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|v| v.trim_matches('"').parse::<usize>().ok())
+        }
+        .unwrap_or_else(|| {
+            state.config.default_model().map(|p| p.max_tokens as usize).unwrap_or(4096)
+        });
+
         let context_builder = ContextBuilder::new(
             ENI_SYSTEM_PROMPT.to_string(),
             post_card_prompt,
-            state.config.default_model().map(|p| p.max_tokens as usize).unwrap_or(4096),
+            context_max_tokens,
         );
 
         // Open a fresh DB connection for this turn
@@ -501,7 +519,7 @@ async fn handle_user_message(
             let event_tx = ws_sender.inner().clone();
 
             // Register all tools
-            dispatcher.register(Box::new(ReadCharacterTool::new(Arc::clone(&st_client))));
+            dispatcher.register(Box::new(ReadCharacterTool::new(Arc::clone(&st_client), event_tx.clone())));
             dispatcher.register(Box::new(WriteCharacterTool::new(
                 Arc::clone(&st_client),
                 Arc::clone(&version_store),
@@ -509,7 +527,7 @@ async fn handle_user_message(
             )));
             dispatcher.register(Box::new(ListCharactersTool::new(Arc::clone(&st_client))));
             dispatcher.register(Box::new(ExportCardTool::new(Arc::clone(&st_client), None)));
-            dispatcher.register(Box::new(ReadPersonaTool::new(Arc::clone(&st_client))));
+            dispatcher.register(Box::new(ReadPersonaTool::new(Arc::clone(&st_client), event_tx.clone())));
             dispatcher.register(Box::new(WritePersonaTool::new(
                 Arc::clone(&st_client),
                 Arc::clone(&version_store),

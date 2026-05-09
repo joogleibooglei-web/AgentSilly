@@ -18,14 +18,17 @@ use crate::versioning::VersionStore;
 // ─── ReadPersonaTool ────────────────────────────────────────────────────────
 
 /// Tool that reads a user persona from SillyTavern via the ST REST API.
+///
+/// Automatically sends a preview event to the frontend so the Persona tab updates.
 pub struct ReadPersonaTool {
     st_client: Arc<Mutex<StClient>>,
+    event_tx: tokio::sync::mpsc::Sender<WsEvent>,
 }
 
 impl ReadPersonaTool {
-    /// Create a new `ReadPersonaTool` with a shared ST client.
-    pub fn new(st_client: Arc<Mutex<StClient>>) -> Self {
-        Self { st_client }
+    /// Create a new `ReadPersonaTool` with a shared ST client and event sender.
+    pub fn new(st_client: Arc<Mutex<StClient>>, event_tx: tokio::sync::mpsc::Sender<WsEvent>) -> Self {
+        Self { st_client, event_tx }
     }
 }
 
@@ -67,6 +70,15 @@ impl Tool for ReadPersonaTool {
         };
 
         let result = serde_json::to_value(&persona)?;
+
+        // Send preview event to frontend so the Persona tab updates automatically
+        let _ = self.event_tx
+            .send(WsEvent::Preview {
+                tab: "persona".to_string(),
+                data: result.clone(),
+            })
+            .await;
+
         Ok(result)
     }
 }
@@ -169,7 +181,14 @@ impl Tool for WritePersonaTool {
             summary: "Persona updated".to_string(),
         }).await;
 
-        // 6. Return success
+        // 6. Send preview event so the Persona tab updates with the new data
+        let updated_data = serde_json::to_value(&updated)?;
+        let _ = self.event_tx.send(WsEvent::Preview {
+            tab: "persona".to_string(),
+            data: updated_data,
+        }).await;
+
+        // 7. Return success
         Ok(serde_json::json!({
             "success": true,
             "persona": name,

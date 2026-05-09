@@ -629,15 +629,20 @@ impl StClient {
         let url = format!("{}/api/personas/all", self.base_url);
         debug!(url = %url, "Fetching persona list");
 
-        let resp = self.get_request(&url).send().await.map_err(|e| {
-            self.invalidate_connection();
-            anyhow::anyhow!(
-                "SillyTavern is not reachable at '{}': {}. \
-                 Please ensure SillyTavern is running and the base URL is correct.",
-                self.base_url,
-                e
-            )
-        })?;
+        // ST requires POST for this endpoint (not GET)
+        let resp = self.post_request(&url)
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| {
+                self.invalidate_connection();
+                anyhow::anyhow!(
+                    "SillyTavern is not reachable at '{}': {}. \
+                     Please ensure SillyTavern is running and the base URL is correct.",
+                    self.base_url,
+                    e
+                )
+            })?;
 
         if !resp.status().is_success() {
             if resp.status().as_u16() == 403 {

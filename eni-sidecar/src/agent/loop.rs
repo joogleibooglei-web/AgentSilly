@@ -14,7 +14,7 @@ use tracing::{debug, error, info, warn};
 use crate::config::AppConfig;
 use crate::context::{ContextBuilder, DocumentChunk};
 use crate::db::Database;
-use crate::llm::{ChatMessage, ChatToolCall, ChatFunctionCall, LlmResponse, LlmClient, TokenCallback};
+use crate::llm::{ChatMessage, ChatToolCall, ChatFunctionCall, LlmResponse, LlmClient, TokenCallback, ThinkingCallback};
 use crate::lorebook::Lorebook;
 use crate::tools::ToolDispatcher;
 
@@ -145,6 +145,15 @@ pub async fn run_turn(
             let _ = tx_clone.try_send(event);
         });
 
+        // Thinking/reasoning callback — relays reasoning tokens to the frontend
+        let tx_thinking = tx.clone();
+        let thinking_callback: ThinkingCallback = Box::new(move |token: &str| {
+            let event = WsEvent::Thinking {
+                content: token.to_string(),
+            };
+            let _ = tx_thinking.try_send(event);
+        });
+
         // Use tokio::select! to race the LLM call against cancellation
         let llm_result = tokio::select! {
             _ = cancel_token.cancelled() => {
@@ -161,6 +170,7 @@ pub async fn run_turn(
                 &messages,
                 &tool_definitions,
                 Some(&token_callback),
+                Some(&thinking_callback),
             ) => result
         };
 
