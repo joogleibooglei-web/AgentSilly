@@ -15,9 +15,12 @@
   function renderMarkdown(text: string): string {
     let html = escapeHtml(text);
 
-    // Code blocks (```...```)
+    // Extract code blocks first, replace with placeholders to protect them
+    const codeBlocks: string[] = [];
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, _lang, code) => {
-      return `<pre class="code-block"><code>${code.trim()}</code></pre>`;
+      const index = codeBlocks.length;
+      codeBlocks.push(`<pre class="code-block"><code>${code.trim()}</code></pre>`);
+      return `\x00CODEBLOCK_${index}\x00`;
     });
 
     // Inline code (`...`)
@@ -33,8 +36,13 @@
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
     html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`);
 
-    // Line breaks
+    // Line breaks (only outside code blocks)
     html = html.replace(/\n/g, '<br>');
+
+    // Restore code blocks
+    html = html.replace(/\x00CODEBLOCK_(\d+)\x00/g, (_match, index) => {
+      return codeBlocks[parseInt(index)];
+    });
 
     return html;
   }
@@ -185,6 +193,13 @@
     font-family: var(--mono);
     font-size: 11px;
     line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .msg-bubble :global(.code-block code) {
+    white-space: pre;
+    display: block;
   }
 
   .msg-bubble :global(ul) {

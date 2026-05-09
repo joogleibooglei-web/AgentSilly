@@ -170,72 +170,123 @@ impl Tool for UpdateCharacterTool {
         )?;
 
         // 4. Build the update payload (only changed fields)
+        //
+        // SillyTavern character cards use a dual-layer structure (TavernCard V2):
+        //   - Top-level V1 fields: `description`, `personality`, `first_mes`, etc.
+        //   - Nested V2 `data` object: `data.description`, `data.personality`, etc.
+        //
+        // When ST reads a card back (`readFromV2`), it copies `data.*` values
+        // over the top-level fields — meaning `data.*` takes precedence.
+        // The `merge-attributes` endpoint does a deep merge, so we MUST set
+        // both the top-level field AND the corresponding `data.*` field for
+        // any V2-spec field. Otherwise the stale `data.*` value overwrites
+        // our top-level update on the next read.
         let mut updates = serde_json::Map::new();
+        let mut data_updates = serde_json::Map::new();
         let mut updated_fields: Vec<String> = Vec::new();
 
         if let Some(v) = args.get("description").and_then(|v| v.as_str()) {
-            updates.insert("description".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("description".to_string(), val.clone());
+            data_updates.insert("description".to_string(), val);
             updated_fields.push("description".to_string());
         }
         if let Some(v) = args.get("personality").and_then(|v| v.as_str()) {
-            updates.insert("personality".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("personality".to_string(), val.clone());
+            data_updates.insert("personality".to_string(), val);
             updated_fields.push("personality".to_string());
         }
         if let Some(v) = args.get("scenario").and_then(|v| v.as_str()) {
-            updates.insert("scenario".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("scenario".to_string(), val.clone());
+            data_updates.insert("scenario".to_string(), val);
             updated_fields.push("scenario".to_string());
         }
         if let Some(v) = args.get("first_mes").and_then(|v| v.as_str()) {
-            updates.insert("first_mes".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("first_mes".to_string(), val.clone());
+            data_updates.insert("first_mes".to_string(), val);
             updated_fields.push("first_mes".to_string());
         }
         if let Some(v) = args.get("mes_example").and_then(|v| v.as_str()) {
-            updates.insert("mes_example".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("mes_example".to_string(), val.clone());
+            data_updates.insert("mes_example".to_string(), val);
             updated_fields.push("mes_example".to_string());
         }
         if let Some(v) = args.get("creator_notes").and_then(|v| v.as_str()) {
-            updates.insert("creator_notes".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("creator_notes".to_string(), val.clone());
+            data_updates.insert("creator_notes".to_string(), val);
             updated_fields.push("creator_notes".to_string());
         }
         if let Some(v) = args.get("system_prompt").and_then(|v| v.as_str()) {
-            updates.insert("system_prompt".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("system_prompt".to_string(), val.clone());
+            data_updates.insert("system_prompt".to_string(), val);
             updated_fields.push("system_prompt".to_string());
         }
         if let Some(v) = args.get("post_history_instructions").and_then(|v| v.as_str()) {
-            updates.insert("post_history_instructions".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("post_history_instructions".to_string(), val.clone());
+            data_updates.insert("post_history_instructions".to_string(), val);
             updated_fields.push("post_history_instructions".to_string());
         }
         if let Some(tags_val) = args.get("tags").and_then(|v| v.as_array()) {
-            updates.insert("tags".to_string(), serde_json::Value::Array(tags_val.clone()));
+            let val = serde_json::Value::Array(tags_val.clone());
+            updates.insert("tags".to_string(), val.clone());
+            data_updates.insert("tags".to_string(), val);
             updated_fields.push("tags".to_string());
         }
         if let Some(alt_greetings_val) = args.get("alternate_greetings").and_then(|v| v.as_array()) {
-            updates.insert("alternate_greetings".to_string(), serde_json::Value::Array(alt_greetings_val.clone()));
+            let val = serde_json::Value::Array(alt_greetings_val.clone());
+            updates.insert("alternate_greetings".to_string(), val.clone());
+            data_updates.insert("alternate_greetings".to_string(), val);
             updated_fields.push("alternate_greetings".to_string());
         }
         if let Some(v) = args.get("character_book") {
             if v.is_object() {
                 updates.insert("character_book".to_string(), v.clone());
+                data_updates.insert("character_book".to_string(), v.clone());
                 updated_fields.push("character_book".to_string());
             }
         }
         if let Some(v) = args.get("extensions") {
             if v.is_object() {
                 updates.insert("extensions".to_string(), v.clone());
+                data_updates.insert("extensions".to_string(), v.clone());
                 updated_fields.push("extensions".to_string());
             }
         }
         if let Some(v) = args.get("creator").and_then(|v| v.as_str()) {
-            updates.insert("creator".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("creator".to_string(), val.clone());
+            data_updates.insert("creator".to_string(), val);
             updated_fields.push("creator".to_string());
         }
         if let Some(v) = args.get("character_version").and_then(|v| v.as_str()) {
-            updates.insert("character_version".to_string(), serde_json::Value::String(v.to_string()));
+            let val = serde_json::Value::String(v.to_string());
+            updates.insert("character_version".to_string(), val.clone());
+            data_updates.insert("character_version".to_string(), val);
             updated_fields.push("character_version".to_string());
         }
         if let Some(v) = args.get("talkativeness").and_then(|v| v.as_f64()) {
-            updates.insert("talkativeness".to_string(), serde_json::json!(v));
+            let val = serde_json::json!(v);
+            updates.insert("talkativeness".to_string(), val.clone());
+            // In V2, talkativeness lives under data.extensions.talkativeness
+            let extensions_obj = data_updates
+                .entry("extensions".to_string())
+                .or_insert_with(|| serde_json::json!({}));
+            if let Some(ext_map) = extensions_obj.as_object_mut() {
+                ext_map.insert("talkativeness".to_string(), val);
+            }
             updated_fields.push("talkativeness".to_string());
+        }
+
+        // Nest the V2 `data` object into the update payload
+        if !data_updates.is_empty() {
+            updates.insert("data".to_string(), serde_json::Value::Object(data_updates));
         }
 
         if updated_fields.is_empty() {

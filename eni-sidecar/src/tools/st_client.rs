@@ -548,9 +548,72 @@ impl StClient {
             );
         }
 
-        let character: CharacterData = resp.json().await.with_context(|| {
+        let raw: serde_json::Value = resp.json().await.with_context(|| {
             format!("Failed to parse character data for '{avatar_url}' from SillyTavern")
         })?;
+
+        // SillyTavern returns a V2 card with dual structure:
+        //   - Top-level V1 fields (name, description, personality, etc.)
+        //   - Nested `data` object with V2 fields (data.alternate_greetings, data.creator, etc.)
+        //
+        // The `readFromV2` function in ST only hoists a subset of fields to the top level.
+        // Fields like alternate_greetings, creator_notes, system_prompt, post_history_instructions,
+        // creator, and character_version remain ONLY in `data.*`.
+        //
+        // We deserialize from the top level first, then backfill from `data.*` for any
+        // fields that are empty/missing at the top level but present in the nested object.
+        let mut character: CharacterData = serde_json::from_value(raw.clone()).with_context(|| {
+            format!("Failed to deserialize character data for '{avatar_url}'")
+        })?;
+
+        // Backfill fields from `data.*` that ST doesn't hoist to the top level
+        if let Some(data_obj) = raw.get("data") {
+            if character.alternate_greetings.is_empty() {
+                if let Some(alt) = data_obj.get("alternate_greetings").and_then(|v| v.as_array()) {
+                    character.alternate_greetings = alt.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
+            if character.creator_notes.is_empty() {
+                if let Some(v) = data_obj.get("creator_notes").and_then(|v| v.as_str()) {
+                    character.creator_notes = v.to_string();
+                }
+            }
+            if character.system_prompt.is_empty() {
+                if let Some(v) = data_obj.get("system_prompt").and_then(|v| v.as_str()) {
+                    character.system_prompt = v.to_string();
+                }
+            }
+            if character.post_history_instructions.is_empty() {
+                if let Some(v) = data_obj.get("post_history_instructions").and_then(|v| v.as_str()) {
+                    character.post_history_instructions = v.to_string();
+                }
+            }
+            if character.creator.is_empty() {
+                if let Some(v) = data_obj.get("creator").and_then(|v| v.as_str()) {
+                    character.creator = v.to_string();
+                }
+            }
+            if character.character_version.is_empty() {
+                if let Some(v) = data_obj.get("character_version").and_then(|v| v.as_str()) {
+                    character.character_version = v.to_string();
+                }
+            }
+            if character.character_book.is_none() {
+                character.character_book = data_obj.get("character_book").cloned();
+            }
+            if character.extensions.is_none() {
+                character.extensions = data_obj.get("extensions").cloned();
+            }
+            if character.tags.is_empty() {
+                if let Some(tags) = data_obj.get("tags").and_then(|v| v.as_array()) {
+                    character.tags = tags.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect();
+                }
+            }
+        }
 
         Ok(character)
     }
