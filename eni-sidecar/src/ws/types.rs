@@ -36,6 +36,10 @@ pub enum ClientMessage {
     },
     /// User requests a test of the LLM connection with current settings.
     TestConnection,
+    /// Frontend reports the SillyTavern origin URL (auto-detected from browser context).
+    ReportStUrl {
+        url: String,
+    },
 }
 
 /// A sender wrapper that serializes `WsEvent` variants and relays them

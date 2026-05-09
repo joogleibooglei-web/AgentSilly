@@ -13,14 +13,31 @@
   let { open = true, onclose }: Props = $props();
 
   let panelMode: PanelMode = $state('chat-only');
-  let panelWidth = $state(480);
+  let panelWidth = $state(420);
+  let chatWidth = $state(280);
   let isResizing = $state(false);
+  let isResizingSplit = $state(false);
 
   const MIN_WIDTH = 320;
-  const MAX_WIDTH = 900;
+  const MAX_WIDTH = 1200;
+  const CHAT_ONLY_WIDTH = 420;
+  const SPLIT_WIDTH = 780;
+  const MIN_CHAT_WIDTH = 240;
+  const MIN_RIGHT_WIDTH = 280;
 
   const unsubUi = ui.subscribe(($ui) => {
+    const prevMode = panelMode;
     panelMode = $ui.panelMode;
+
+    // Expand/contract panel when right pane opens/closes
+    if (prevMode !== panelMode) {
+      if (panelMode === 'split') {
+        panelWidth = Math.max(panelWidth, SPLIT_WIDTH);
+        chatWidth = Math.round(panelWidth * 0.4);
+      } else {
+        panelWidth = CHAT_ONLY_WIDTH;
+      }
+    }
   });
 
   function handleClose() {
@@ -33,7 +50,7 @@
     }
   }
 
-  // Resize handle logic
+  // Resize handle logic (left edge — resizes whole panel)
   function startResize(event: MouseEvent) {
     event.preventDefault();
     isResizing = true;
@@ -44,10 +61,38 @@
       const delta = startX - e.clientX;
       const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + delta));
       panelWidth = newWidth;
+      // Keep chat width proportional in split mode
+      if (panelMode === 'split') {
+        chatWidth = Math.min(chatWidth, newWidth - MIN_RIGHT_WIDTH);
+      }
     }
 
     function onMouseUp() {
       isResizing = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }
+
+  // Split resize handle logic (between chat and right pane)
+  function startSplitResize(event: MouseEvent) {
+    event.preventDefault();
+    isResizingSplit = true;
+    const startX = event.clientX;
+    const startChatWidth = chatWidth;
+
+    function onMouseMove(e: MouseEvent) {
+      const delta = e.clientX - startX;
+      const maxChat = panelWidth - MIN_RIGHT_WIDTH;
+      const newChatWidth = Math.min(maxChat, Math.max(MIN_CHAT_WIDTH, startChatWidth + delta));
+      chatWidth = newChatWidth;
+    }
+
+    function onMouseUp() {
+      isResizingSplit = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     }
@@ -86,9 +131,19 @@
 
     <!-- Content area -->
     <div class="content">
-      <ChatPane />
       {#if panelMode === 'split'}
+        <div class="chat-wrapper" style="width: {chatWidth}px;">
+          <ChatPane />
+        </div>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="split-resize-handle"
+          class:active={isResizingSplit}
+          onmousedown={startSplitResize}
+        ></div>
         <RightPane />
+      {:else}
+        <ChatPane />
       {/if}
     </div>
 
@@ -176,12 +231,24 @@
     overflow: hidden;
   }
 
-  /* When in split mode, constrain the chat pane */
-  .panel.split :global(.chat-pane) {
-    width: 40%;
-    min-width: 280px;
-    flex: none;
+  .chat-wrapper {
+    flex-shrink: 0;
+    display: flex;
+    overflow: hidden;
     border-right: 1px solid var(--border);
+  }
+
+  .split-resize-handle {
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 150ms;
+    flex-shrink: 0;
+  }
+
+  .split-resize-handle:hover,
+  .split-resize-handle.active {
+    background: var(--accent);
   }
 
   @keyframes slideIn {

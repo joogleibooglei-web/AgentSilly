@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::config::StConfig;
 
@@ -100,11 +100,14 @@ impl StClient {
     /// created but the CSRF token will be `None`. Methods will attempt to
     /// re-fetch the token on first use if missing.
     pub async fn new(config: &StConfig) -> Result<Self> {
-        let base_url = config.base_url.trim_end_matches('/').to_string();
+        let configured_url = config.base_url.trim_end_matches('/').to_string();
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
             .context("Failed to build HTTP client")?;
+
+        // Try the configured URL first, then probe common ports
+        let base_url = Self::detect_st_url(&http, &configured_url, config.api_key.as_deref()).await;
 
         let mut client = Self {
             http,
@@ -119,6 +122,45 @@ impl StClient {
         }
 
         Ok(client)
+    }
+
+    /// Auto-detect the SillyTavern URL by probing the configured URL and common ports.
+    async fn detect_st_url(http: &reqwest::Client, configured_url: &str, api_key: Option<&str>) -> String {
+        // Try configured URL first
+        if Self::probe_st(http, configured_url, api_key).await {
+            debug!(url = %configured_url, "SillyTavern found at configured URL");
+            return configured_url.to_string();
+        }
+
+        // Probe common SillyTavern ports
+        let common_ports = [8000, 8080, 8181, 8787, 8888];
+        for port in common_ports {
+            let candidate = format!("http://localhost:{}", port);
+            if candidate == configured_url {
+                continue; // Already tried
+            }
+            if Self::probe_st(http, &candidate, api_key).await {
+                info!(url = %candidate, "SillyTavern auto-detected");
+                return candidate;
+            }
+        }
+
+        // Fall back to configured URL
+        debug!("SillyTavern not detected on any common port, using configured URL");
+        configured_url.to_string()
+    }
+
+    /// Probe a URL to check if SillyTavern is running there.
+    async fn probe_st(http: &reqwest::Client, url: &str, api_key: Option<&str>) -> bool {
+        let probe_url = format!("{}/csrf-token", url);
+        let mut req = http.get(&probe_url).timeout(std::time::Duration::from_secs(2));
+        if let Some(key) = api_key {
+            req = req.header("Authorization", format!("Bearer {key}"));
+        }
+        match req.send().await {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
+        }
     }
 
     /// Fetch the CSRF token from SillyTavern's `/csrf-token` endpoint.
@@ -167,7 +209,15 @@ impl StClient {
     /// Ensure we have a CSRF token, fetching one if needed.
     async fn ensure_csrf(&mut self) -> Result<()> {
         if self.csrf_token.is_none() {
-            self.fetch_csrf_token().await?;
+            self.fetch_csrf_token().await.map_err(|e| {
+                anyhow::anyhow!(
+                    "SillyTavern is not reachable at '{}'. \
+                     Please ensure SillyTavern is running and the Sidecar Connection URL is correct in Settings. \
+                     Error: {}",
+                    self.base_url,
+                    e
+                )
+            })?;
         }
         Ok(())
     }

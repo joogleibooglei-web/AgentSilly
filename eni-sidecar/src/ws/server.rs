@@ -205,6 +205,17 @@ async fn handle_connection(
                     ClientMessage::TestConnection => {
                         handle_test_connection(&state, &ws_sender).await;
                     }
+                    ClientMessage::ReportStUrl { url } => {
+                        info!(url = %url, "Frontend reported SillyTavern URL");
+                        // Store it in the config table for use by the ST client
+                        let key = "st_base_url".to_string();
+                        let value_str = serde_json::to_string(&url).unwrap_or_default();
+                        let db = state.db.lock().unwrap();
+                        let _ = db.conn().execute(
+                            "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+                            rusqlite::params![&key, &value_str],
+                        );
+                    }
                 }
             }
             Message::Close(_) => {

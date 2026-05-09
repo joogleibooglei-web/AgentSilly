@@ -13,6 +13,11 @@
 
   let postCardPrompt = $state('');
   let connectionState: ConnectionState = $state('disconnected');
+  let stBaseUrl = $state('http://localhost:8000');
+
+  // Version info
+  const FRONTEND_VERSION = '0.3.5';
+  let sidecarVersion = $state('—');
 
   // Available models fetched from the API
   let availableModels: string[] = $state([]);
@@ -49,7 +54,22 @@
   // Subscribe to connection store
   const unsubConnection = connection.subscribe(($conn: ConnectionStore) => {
     connectionState = $conn.state;
+    if ($conn.state === 'connected') {
+      fetchSidecarVersion();
+    }
   });
+
+  async function fetchSidecarVersion(): Promise<void> {
+    try {
+      const resp = await fetch('http://127.0.0.1:7843/health');
+      if (resp.ok) {
+        const data = await resp.json();
+        sidecarVersion = data.version || '—';
+      }
+    } catch {
+      sidecarVersion = '—';
+    }
+  }
 
   function sendConfigUpdate(key: string, value: unknown): void {
     const ws = getWsClient();
@@ -192,6 +212,17 @@
           <button class="disconnect-btn" onclick={handleDisconnect}>Disconnect</button>
         {/if}
       </div>
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="form-label" for="settings-st-url">SillyTavern URL</label>
+        <input
+          id="settings-st-url"
+          class="form-input"
+          type="text"
+          bind:value={stBaseUrl}
+          onblur={() => sendConfigUpdate('st_base_url', stBaseUrl)}
+          placeholder="http://localhost:8000"
+        />
+      </div>
     </div>
 
     <!-- Model Profile Configuration -->
@@ -318,6 +349,13 @@
         />
         Upload Document
       </label>
+    </div>
+
+    <!-- Version Info -->
+    <div class="version-info">
+      <span>Frontend v{FRONTEND_VERSION}</span>
+      <span>·</span>
+      <span>Sidecar v{sidecarVersion}</span>
     </div>
   </div>
 
@@ -574,6 +612,16 @@
 
   .test-btn:hover {
     background: rgba(232, 163, 61, 0.2);
+  }
+
+  .version-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 8px 0 4px;
   }
 
 

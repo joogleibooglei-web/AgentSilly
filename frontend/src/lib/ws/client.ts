@@ -105,6 +105,7 @@ export class WsClient {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       setConnected();
+      this.reportStUrl();
       this.fetchConfig();
       this.fetchConversationHistory();
     };
@@ -297,6 +298,21 @@ export class WsClient {
   }
 
   // --- Private Methods ---
+
+  /**
+   * Report the SillyTavern origin URL to the sidecar.
+   * Since this extension runs inside ST's browser context, window.location.origin
+   * gives us the correct ST URL automatically.
+   */
+  private reportStUrl(): void {
+    if (typeof window !== 'undefined' && window.location) {
+      const stUrl = window.location.origin;
+      // Only report if it looks like a local ST instance (not file:// or about:)
+      if (stUrl.startsWith('http')) {
+        this.send({ type: 'report_st_url', url: stUrl } as any);
+      }
+    }
+  }
 
   private handleMessage(data: string): void {
     let msg: ServerMessage;
