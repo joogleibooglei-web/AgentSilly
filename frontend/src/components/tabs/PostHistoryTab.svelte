@@ -2,210 +2,46 @@
   import { onDestroy } from 'svelte';
   import { ui } from '../../lib/stores/ui';
 
-  interface PostHistoryData {
-    narration_style?: string;
-    formatting_rules?: string;
-    tone_keywords?: string[];
-  }
-
-  let postHistory: PostHistoryData | null = $state(null);
-  let copySuccess = $state(false);
+  let content: string | null = $state(null);
 
   const unsubUi = ui.subscribe(($ui) => {
-    postHistory = $ui.previewData.posthistory as PostHistoryData | null;
+    const raw = $ui.previewData.posthistory;
+    content = typeof raw === 'string' ? raw : null;
   });
-
-  function formatForClipboard(): string {
-    if (!postHistory) return '';
-    const parts: string[] = [];
-    if (postHistory.narration_style) parts.push(`Narration Style:\n${postHistory.narration_style}`);
-    if (postHistory.formatting_rules) parts.push(`\nFormatting Rules:\n${postHistory.formatting_rules}`);
-    if (postHistory.tone_keywords?.length) parts.push(`\nTone Keywords: ${postHistory.tone_keywords.join(', ')}`);
-    return parts.join('\n');
-  }
-
-  async function copyToClipboard() {
-    const text = formatForClipboard();
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      copySuccess = true;
-      setTimeout(() => { copySuccess = false; }, 2000);
-    } catch {
-      // Fallback for older browsers
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      copySuccess = true;
-      setTimeout(() => { copySuccess = false; }, 2000);
-    }
-  }
 
   onDestroy(unsubUi);
 </script>
 
-{#if postHistory}
+{#if content}
   <div class="posthistory-tab">
-    <div class="preview-card">
-      <div class="preview-card-header">
-        <div class="preview-avatar">📝</div>
-        <div class="preview-meta">
-          <h2 class="card-title">Post-History</h2>
-          {#if postHistory.tone_keywords && postHistory.tone_keywords.length > 0}
-            <div class="tag-list">
-              {#each postHistory.tone_keywords as keyword}
-                <span class="tag-pill">{keyword}</span>
-              {/each}
-            </div>
-          {/if}
-        </div>
-        <button class="copy-btn" onclick={copyToClipboard} aria-label="Copy post-history data to clipboard">
-          {#if copySuccess}
-            ✓
-          {:else}
-            📋
-          {/if}
-        </button>
-      </div>
-
-      <!-- Narration Style -->
-      {#if postHistory.narration_style}
-        <div class="section">
-          <div class="section-label">Narration Style</div>
-          <div class="section-content mono">{postHistory.narration_style}</div>
-        </div>
-      {/if}
-
-      <!-- Formatting Rules -->
-      {#if postHistory.formatting_rules}
-        <div class="section">
-          <div class="section-label">Formatting Rules</div>
-          <div class="section-content mono">{postHistory.formatting_rules}</div>
-        </div>
-      {/if}
-    </div>
+    <pre class="draft-content">{content}</pre>
   </div>
 {:else}
   <div class="tab-placeholder">
     <span class="placeholder-icon">📝</span>
     <span class="placeholder-text">Post-History</span>
-    <span class="placeholder-hint">Ask ENI to generate post-history settings to see them here.</span>
+    <span class="placeholder-hint">Ask ENI to draft post-history instructions to see them here.</span>
   </div>
 {/if}
 
 <style>
   .posthistory-tab {
     height: 100%;
+    overflow-y: auto;
   }
 
-  .preview-card {
-    background: var(--bg-surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px;
-  }
-
-  .preview-card-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .preview-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    font-weight: 700;
-    color: white;
-    background: linear-gradient(135deg, var(--accent), #ff6b9d);
-    flex-shrink: 0;
-  }
-
-  .preview-meta {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .card-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: var(--text);
-  }
-
-  .tag-list {
-    display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-  }
-
-  .tag-pill {
-    font-size: 9px;
-    padding: 2px 6px;
-    background: rgba(232, 163, 61, 0.1);
-    color: var(--accent);
-    border-radius: 3px;
+  .draft-content {
     font-family: var(--mono);
-  }
-
-  .copy-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 5px 8px;
-    font-size: 12px;
-    transition: all 120ms;
-    flex-shrink: 0;
-  }
-
-  .copy-btn:hover {
-    color: var(--text);
-    background: var(--surface-hover);
-  }
-
-  .section {
-    margin-bottom: 12px;
-  }
-
-  .section:last-child {
-    margin-bottom: 0;
-  }
-
-  .section-label {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 4px;
-  }
-
-  .section-content {
     font-size: 12px;
     line-height: 1.6;
     color: var(--text-secondary);
-  }
-
-  .section-content.mono {
-    font-family: var(--mono);
-    font-size: 11px;
     background: var(--bg-elevated);
-    padding: 10px;
-    border-radius: 4px;
+    padding: 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
     white-space: pre-wrap;
-    word-break: break-word;
+    word-wrap: break-word;
+    margin: 0;
   }
 
   .tab-placeholder {

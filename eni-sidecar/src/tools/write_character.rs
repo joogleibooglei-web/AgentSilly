@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 use super::dispatcher::{validate_against_schema, Tool};
 use super::st_client::StClient;
 use crate::agent::events::WsEvent;
+use crate::agent::session::SharedSessionContext;
 use crate::versioning::VersionStore;
 
 /// Tool that writes one or more fields to a character card in SillyTavern.
@@ -23,6 +24,7 @@ pub struct WriteCharacterTool {
     st_client: Arc<Mutex<StClient>>,
     version_store: Arc<VersionStore>,
     event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+    session_ctx: SharedSessionContext,
 }
 
 impl WriteCharacterTool {
@@ -31,11 +33,13 @@ impl WriteCharacterTool {
         st_client: Arc<Mutex<StClient>>,
         version_store: Arc<VersionStore>,
         event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+        session_ctx: SharedSessionContext,
     ) -> Self {
         Self {
             st_client,
             version_store,
             event_tx,
+            session_ctx,
         }
     }
 }
@@ -242,6 +246,12 @@ impl Tool for WriteCharacterTool {
             let update_value = serde_json::Value::Object(updates);
             let mut client = self.st_client.lock().await;
             client.edit_character(&avatar_url, &update_value).await?;
+        }
+
+        // 5a. Update session context with the avatar_url of the character we just wrote
+        {
+            let mut ctx = self.session_ctx.lock().await;
+            ctx.last_avatar_url = Some(avatar_url.clone());
         }
 
         // 6. Re-read the updated character and send preview event to frontend

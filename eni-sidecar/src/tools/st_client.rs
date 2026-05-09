@@ -750,6 +750,13 @@ impl StClient {
             .pointer("/power_user/persona_descriptions")
             .and_then(|v| v.as_object());
 
+        if personas_map.is_none() {
+            warn!("power_user.personas not found in settings. Top-level keys: {:?}",
+                settings.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+        } else {
+            debug!(count = personas_map.unwrap().len(), "Found personas map in settings");
+        }
+
         // 3. Build persona summaries
         let personas: Vec<PersonaSummary> = avatar_list
             .iter()
@@ -896,6 +903,11 @@ impl StClient {
     }
 
     /// Fetch the raw settings JSON from SillyTavern.
+    ///
+    /// SillyTavern's `/api/settings/get` endpoint returns a response object where
+    /// the `settings` field is a **JSON string** (the raw content of settings.json),
+    /// not a parsed object. This method extracts and parses that inner string to
+    /// return the actual user settings as a JSON Value.
     async fn get_settings_raw(&mut self) -> Result<serde_json::Value> {
         let url = format!("{}/api/settings/get", self.base_url);
         debug!(url = %url, "Fetching settings");
@@ -924,9 +936,25 @@ impl StClient {
             );
         }
 
-        let settings: serde_json::Value = resp.json().await.context(
+        let response_body: serde_json::Value = resp.json().await.context(
             "Failed to parse settings response from SillyTavern",
         )?;
+
+        // ST's /api/settings/get returns { "settings": "<json string>", ... }
+        // The "settings" field is a JSON-encoded string that we need to parse.
+        let settings = if let Some(settings_str) = response_body.get("settings").and_then(|v| v.as_str()) {
+            serde_json::from_str(settings_str).context(
+                "Failed to parse inner settings JSON string from SillyTavern response",
+            )?
+        } else if response_body.get("power_user").is_some() {
+            // Fallback: if the response already has power_user at the top level,
+            // it might be a newer ST version that returns parsed settings directly
+            response_body
+        } else {
+            // Last fallback: return the response as-is and let callers handle it
+            debug!("Settings response has no 'settings' string field and no 'power_user' — returning raw response");
+            response_body
+        };
 
         Ok(settings)
     }

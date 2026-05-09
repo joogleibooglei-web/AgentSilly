@@ -135,7 +135,7 @@ export function setToolEnd(name: string, success: boolean): void {
  */
 export function finalizeStreaming(): void {
   conversation.update((s) => {
-    if (!s.isStreaming) return s;
+    if (!s.isStreaming && !s.streamingThinking && !s.activeToolCall) return s;
 
     const newMessages = [...s.messages];
 

@@ -12,6 +12,8 @@
 
 pub mod events;
 pub mod r#loop;
+pub mod session;
 
 pub use events::{AgentState, WsEvent};
 pub use r#loop::{run_turn, AgentContext};
+pub use session::SharedSessionContext;

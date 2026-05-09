@@ -11,6 +11,7 @@ use tracing::debug;
 use super::dispatcher::{validate_against_schema, Tool};
 use super::st_client::StClient;
 use crate::agent::events::WsEvent;
+use crate::agent::session::SharedSessionContext;
 
 /// Tool that reads character data from SillyTavern via the ST REST API.
 ///
@@ -19,12 +20,17 @@ use crate::agent::events::WsEvent;
 pub struct ReadCharacterTool {
     st_client: Arc<Mutex<StClient>>,
     event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+    session_ctx: SharedSessionContext,
 }
 
 impl ReadCharacterTool {
-    /// Create a new `ReadCharacterTool` with a shared ST client and event sender.
-    pub fn new(st_client: Arc<Mutex<StClient>>, event_tx: tokio::sync::mpsc::Sender<WsEvent>) -> Self {
-        Self { st_client, event_tx }
+    /// Create a new `ReadCharacterTool` with a shared ST client, event sender, and session context.
+    pub fn new(
+        st_client: Arc<Mutex<StClient>>,
+        event_tx: tokio::sync::mpsc::Sender<WsEvent>,
+        session_ctx: SharedSessionContext,
+    ) -> Self {
+        Self { st_client, event_tx, session_ctx }
     }
 }
 
@@ -81,6 +87,12 @@ impl Tool for ReadCharacterTool {
             let mut client = self.st_client.lock().await;
             client.get_character(&avatar_url).await?
         };
+
+        // Update session context with the avatar URL of the character just read
+        {
+            let mut ctx = self.session_ctx.lock().await;
+            ctx.last_avatar_url = Some(avatar_url.clone());
+        }
 
         // Serialize the full character to a JSON Value
         let full_value = serde_json::to_value(&character)?;

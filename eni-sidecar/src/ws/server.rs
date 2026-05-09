@@ -22,10 +22,12 @@ use crate::db::Database;
 use crate::llm::LlmClient;
 use crate::prompts::ENI_SYSTEM_PROMPT;
 use crate::search::SearchIndex;
+use crate::agent::session::{SessionContext, SharedSessionContext};
 use crate::tools::{
     self, ToolDispatcher, ExportCardTool, ListCharactersTool, ReadCharacterTool,
     WriteCharacterTool, ReadPersonaTool, WritePersonaTool, ListPersonasTool,
-    ReadPostHistoryTool, WritePostHistoryTool, ReadWorldEntriesTool, WriteWorldEntryTool,
+    CreateWorldDraftTool, EditWorldDraftTool, FinalizeWorldInfoTool,
+    CreatePostHistoryDraftTool, EditPostHistoryDraftTool, FinalizePostHistoryTool,
     SearchLocalTool, SearchWikiTool, FetchWikiPageTool, CreateProjectTool, ManageTasksTool,
     UndoChangeTool, ListVersionsTool, StClient,
 };
@@ -518,12 +520,16 @@ async fn handle_user_message(
             // Get the event sender for tools that need to send WS events
             let event_tx = ws_sender.inner().clone();
 
+            // Create per-connection session context for draft finalization tools
+            let session_ctx: SharedSessionContext = Arc::new(tokio::sync::Mutex::new(SessionContext::default()));
+
             // Register all tools
-            dispatcher.register(Box::new(ReadCharacterTool::new(Arc::clone(&st_client), event_tx.clone())));
+            dispatcher.register(Box::new(ReadCharacterTool::new(Arc::clone(&st_client), event_tx.clone(), session_ctx.clone())));
             dispatcher.register(Box::new(WriteCharacterTool::new(
                 Arc::clone(&st_client),
                 Arc::clone(&version_store),
                 event_tx.clone(),
+                session_ctx.clone(),
             )));
             dispatcher.register(Box::new(ListCharactersTool::new(Arc::clone(&st_client))));
             dispatcher.register(Box::new(ExportCardTool::new(Arc::clone(&st_client), None)));
@@ -534,16 +540,18 @@ async fn handle_user_message(
                 event_tx.clone(),
             )));
             dispatcher.register(Box::new(ListPersonasTool::new(Arc::clone(&st_client))));
-            dispatcher.register(Box::new(ReadPostHistoryTool::new(Arc::clone(&tool_db))));
-            dispatcher.register(Box::new(WritePostHistoryTool::new(
-                Arc::clone(&tool_db),
-                Arc::clone(&version_store),
+            dispatcher.register(Box::new(CreateWorldDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(EditWorldDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(FinalizeWorldInfoTool::new(
+                Arc::clone(&st_client),
+                session_ctx.clone(),
                 event_tx.clone(),
             )));
-            dispatcher.register(Box::new(ReadWorldEntriesTool::new(Arc::clone(&tool_db))));
-            dispatcher.register(Box::new(WriteWorldEntryTool::new(
-                Arc::clone(&tool_db),
-                Arc::clone(&version_store),
+            dispatcher.register(Box::new(CreatePostHistoryDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(EditPostHistoryDraftTool::new(event_tx.clone())));
+            dispatcher.register(Box::new(FinalizePostHistoryTool::new(
+                Arc::clone(&st_client),
+                session_ctx.clone(),
                 event_tx.clone(),
             )));
             dispatcher.register(Box::new(SearchLocalTool::new(Arc::clone(&search_index))));
