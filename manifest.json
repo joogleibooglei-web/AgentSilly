@@ -1,11 +1,11 @@
 {
-  "display_name": "ENI World Builder",
+  "display_name": "Miss ENI",
   "loading_order": 100,
   "requires": [],
   "optional": [],
   "js": "dist/index.js",
   "css": "dist/index.css",
-  "author": "ENI World Builder Team",
+  "author": "Miss ENI Team",
   "version": "0.2.2",
   "homePage": "https://github.com/joogleibooglei-web/AgentSilly",
   "auto_update": true

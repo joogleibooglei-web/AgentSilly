@@ -14,7 +14,7 @@
 
 <div class="wb-root">
   {#if !panelOpen}
-    <button class="wb-toggle-btn" onclick={handleOpen} aria-label="Open World Builder">
+    <button class="wb-toggle-btn" onclick={handleOpen} aria-label="Open Miss ENI">
       🌍
     </button>
   {/if}
