@@ -25,7 +25,7 @@ print_banner() {
     echo -e "${PURPLE}${BOLD}"
     echo "  ╔══════════════════════════════════════════════╗"
     echo "  ║                                              ║"
-    echo "  ║       🌍  ENI World Builder  v0.3.5          ║"
+    echo "  ║       🌍  ENI World Builder  v0.4.0          ║"
     echo "  ║                                              ║"
     echo "  ║   AI-powered world building for SillyTavern  ║"
     echo "  ║                                              ║"
