@@ -6,7 +6,7 @@
   "js": "dist/index.js",
   "css": "dist/index.css",
   "author": "ENI the Author Team",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "homePage": "https://github.com/joogleibooglei-web/AgentSilly",
   "auto_update": true
 }

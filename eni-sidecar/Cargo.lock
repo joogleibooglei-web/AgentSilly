@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "eni-sidecar"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "anyhow",
  "async-trait",

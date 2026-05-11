@@ -21,6 +21,7 @@ use crate::context::ContextBuilder;
 use crate::db::Database;
 use crate::llm::LlmClient;
 use crate::prompts::ENI_SYSTEM_PROMPT;
+use crate::prompts::ENI_POST_PROMPT_INSTRUCTIONS;
 use crate::search::SearchIndex;
 use crate::agent::session::{SessionContext, SharedSessionContext};
 use crate::tools::{
@@ -345,11 +346,28 @@ async fn handle_user_message(
             state.config.default_model().map(|p| p.max_tokens as usize).unwrap_or(4096)
         });
 
-        let context_builder = ContextBuilder::new(
+        let mut context_builder = ContextBuilder::new(
             ENI_SYSTEM_PROMPT.to_string(),
             post_card_prompt,
             context_max_tokens,
         );
+
+        // Load ENI post-prompt instructions from the database (user-editable),
+        // falling back to the compiled-in default constant.
+        let eni_instructions = {
+            let db_guard = state.db.lock().unwrap();
+            db_guard
+                .conn()
+                .query_row(
+                    "SELECT value FROM config WHERE key = 'eni_instructions'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|v| serde_json::from_str::<String>(&v).ok().or(Some(v)))
+                .unwrap_or_else(|| ENI_POST_PROMPT_INSTRUCTIONS.to_string())
+        };
+        context_builder.set_eni_instructions(eni_instructions);
 
         // Open a fresh DB connection for this turn
         let db = match Database::open(&state.config.db_path) {
@@ -833,6 +851,7 @@ async fn handle_update_config(
     // context builder and GET /config handler.
     let key_owned = match key {
         "postCardPrompt" => "post_card_prompt".to_string(),
+        "eniInstructions" => "eni_instructions".to_string(),
         other => other.to_string(),
     };
 

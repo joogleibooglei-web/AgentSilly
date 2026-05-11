@@ -37,6 +37,7 @@ pub struct ConfigResponse {
     pub model_profiles: Vec<ModelProfileInfo>,
     pub active_profile: Option<ActiveProfileInfo>,
     pub post_card_prompt: Option<String>,
+    pub eni_instructions: Option<String>,
     pub st_base_url: Option<String>,
 }
 
@@ -119,6 +120,17 @@ pub async fn get_config(
         .ok()
         .and_then(|v: String| serde_json::from_str::<String>(&v).ok().or(Some(v)));
 
+    // Fetch ENI post-prompt instructions from config table
+    let eni_instructions: Option<String> = db
+        .conn()
+        .query_row(
+            "SELECT value FROM config WHERE key = 'eni_instructions'",
+            [],
+            |row| row.get(0),
+        )
+        .ok()
+        .and_then(|v: String| serde_json::from_str::<String>(&v).ok().or(Some(v)));
+
     // Fetch user-configured model profile from config table
     let get_config_value = |key: &str| -> Option<String> {
         db.conn()
@@ -155,6 +167,7 @@ pub async fn get_config(
         model_profiles: profiles,
         active_profile,
         post_card_prompt,
+        eni_instructions,
         st_base_url,
     }))
 }
@@ -173,6 +186,7 @@ pub async fn put_config(
     // Validate allowed config keys
     let allowed_keys = [
         "post_card_prompt",
+        "eni_instructions",
         "st_base_url",
         "st_api_key",
         "max_iterations",

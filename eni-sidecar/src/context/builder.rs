@@ -25,6 +25,9 @@ pub struct ContextBuilder {
     system_prompt: String,
     /// User-editable post-card prompt appended after the personality.
     post_card_prompt: String,
+    /// ENI post-prompt instructions injected after the last user message.
+    /// These are the narrative/RP quality rules ENI must follow.
+    eni_instructions: String,
     /// Maximum token budget for the assembled context.
     max_tokens: usize,
     /// Minimum number of recent messages to always preserve during truncation.
@@ -42,6 +45,7 @@ impl ContextBuilder {
         Self {
             system_prompt,
             post_card_prompt,
+            eni_instructions: String::new(),
             max_tokens,
             preserve_recent: 4,
         }
@@ -57,10 +61,17 @@ impl ContextBuilder {
         self.system_prompt = prompt;
     }
 
+    /// Set the ENI post-prompt instructions that are injected after the last user message.
+    pub fn set_eni_instructions(&mut self, instructions: String) {
+        self.eni_instructions = instructions;
+    }
+
     /// Build the messages array for a chat completion request.
     ///
     /// Assembles: system message (personality + post-card + reference chunks)
     /// followed by conversation history, truncated to fit within the token budget.
+    /// ENI post-prompt instructions are injected as a system message right after
+    /// the last user message, so they're the final guidance ENI sees before responding.
     ///
     /// Post-tool instruction messages (system messages starting with `[System:`)
     /// are pruned so that only the most recent one is kept, preventing token bloat
@@ -86,10 +97,21 @@ impl ContextBuilder {
 
         // Truncate conversation to fit within token budget
         let system_tokens = count_message_tokens(&system_message);
-        let remaining_budget = self.max_tokens.saturating_sub(system_tokens);
+        let eni_instr_tokens = if !self.eni_instructions.is_empty() {
+            count_tokens(&self.eni_instructions) + 4 // message overhead
+        } else {
+            0
+        };
+        let remaining_budget = self.max_tokens.saturating_sub(system_tokens + eni_instr_tokens);
 
         let truncated = self.truncate_to_budget(&pruned_conversation, remaining_budget);
         messages.extend(truncated.into_iter().cloned());
+
+        // Inject ENI post-prompt instructions after the last user message.
+        // This ensures ENI sees these rules as the final thing before generating.
+        if !self.eni_instructions.is_empty() {
+            messages.push(ChatMessage::system(self.eni_instructions.clone()));
+        }
 
         messages
     }
