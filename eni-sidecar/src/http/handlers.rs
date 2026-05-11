@@ -295,11 +295,16 @@ pub async fn get_conversation(
             }
         })?;
 
-    // Fetch messages
+    // Fetch messages (exclude internal post-tool instructions and tool-related messages)
     let mut stmt = db
         .conn()
         .prepare(
-            "SELECT id, role, content, metadata, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, role, content, metadata, created_at FROM messages \
+             WHERE conversation_id = ?1 \
+             AND role IN ('user', 'assistant', 'system') \
+             AND content != '' \
+             AND content NOT LIKE '[System:%' \
+             ORDER BY created_at ASC",
         )
         .map_err(|e| {
             error!(error = %e, "Failed to prepare messages query");

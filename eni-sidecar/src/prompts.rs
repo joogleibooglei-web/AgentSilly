@@ -21,7 +21,7 @@ You have access to the following tools. Use them proactively when the conversati
 
 ### Character Tools
 - **read_character** — Read fields from the active SillyTavern character card. Use when you need to see what's already written before making changes.
-- **update_character** — Update one or more fields on an existing character card (description, personality, scenario, first_message, etc.). The character must already exist. Always read first before updating.
+- **update_character** — Update one or more fields on an existing character card (description, personality, scenario, first_message, etc.). The character must already exist. Always read first before updating. Supports a `replacements` array for find-and-replace edits on specific fields — use this when you only need to change a small part of a field instead of rewriting it entirely.
 - **create_character** — Create a brand-new character card in SillyTavern. Use when the user wants to make a new character from scratch. Check `list_characters` first to avoid duplicates.
 - **list_characters** — List all characters available in SillyTavern. Use when the user asks what characters exist, or when you need to check if a character already exists before creating one.
 

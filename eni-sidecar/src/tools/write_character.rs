@@ -14,6 +14,7 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 
 use super::dispatcher::{validate_against_schema, Tool};
+use super::draft_file::str_replace_first;
 use super::st_client::{CharacterData, StClient};
 use crate::agent::events::WsEvent;
 use crate::agent::session::SharedSessionContext;
@@ -128,6 +129,28 @@ impl Tool for UpdateCharacterTool {
                 "talkativeness": {
                     "type": "number",
                     "description": "0.0-1.0 scale for how often the character initiates in group chats"
+                },
+                "replacements": {
+                    "type": "array",
+                    "description": "Find-and-replace edits on existing field content. Each entry targets a specific field and replaces the first occurrence of old_text with new_text. Use this instead of rewriting an entire field when you only need to change a small part.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {
+                                "type": "string",
+                                "description": "The character field to perform the replacement on (e.g. description, personality, scenario, first_mes, mes_example, creator_notes, system_prompt, post_history_instructions)"
+                            },
+                            "old_text": {
+                                "type": "string",
+                                "description": "The text to find in the field's current content"
+                            },
+                            "new_text": {
+                                "type": "string",
+                                "description": "The replacement text"
+                            }
+                        },
+                        "required": ["field", "old_text", "new_text"]
+                    }
                 }
             },
             "required": ["name"]
@@ -282,6 +305,84 @@ impl Tool for UpdateCharacterTool {
                 ext_map.insert("talkativeness".to_string(), val);
             }
             updated_fields.push("talkativeness".to_string());
+        }
+
+        // 4b. Process find-and-replace edits on existing field content
+        if let Some(replacements) = args.get("replacements").and_then(|v| v.as_array()) {
+            for (i, replacement) in replacements.iter().enumerate() {
+                let field = replacement
+                    .get("field")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("replacements[{}]: missing required parameter 'field'", i)
+                    })?;
+                let old_text = replacement
+                    .get("old_text")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "replacements[{}]: missing required parameter 'old_text'",
+                            i
+                        )
+                    })?;
+                let new_text = replacement
+                    .get("new_text")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "replacements[{}]: missing required parameter 'new_text'",
+                            i
+                        )
+                    })?;
+
+                // Get the current value of the field from the character
+                let current_value = match field {
+                    "description" => current_character.description.clone(),
+                    "personality" => current_character.personality.clone(),
+                    "scenario" => current_character.scenario.clone(),
+                    "first_mes" => current_character.first_mes.clone(),
+                    "mes_example" => current_character.mes_example.clone(),
+                    "creator_notes" => current_character.creator_notes.clone(),
+                    "system_prompt" => current_character.system_prompt.clone(),
+                    "post_history_instructions" => {
+                        current_character.post_history_instructions.clone()
+                    }
+                    "creator" => current_character.creator.clone(),
+                    "character_version" => current_character.character_version.clone(),
+                    _ => {
+                        anyhow::bail!(
+                            "replacements[{}]: unsupported field '{}'. Supported fields: description, personality, scenario, first_mes, mes_example, creator_notes, system_prompt, post_history_instructions, creator, character_version",
+                            i,
+                            field
+                        );
+                    }
+                };
+
+                // If a previous replacement in this batch already updated the same field,
+                // use that value instead of the original
+                let working_value = updates
+                    .get(field)
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or(current_value);
+
+                let replaced = str_replace_first(&working_value, old_text, new_text).ok_or_else(
+                    || {
+                        anyhow::anyhow!(
+                            "replacements[{}]: old_text not found in field '{}'. The text does not match any content in the current field value.",
+                            i,
+                            field
+                        )
+                    },
+                )?;
+
+                let val = serde_json::Value::String(replaced);
+                updates.insert(field.to_string(), val.clone());
+                data_updates.insert(field.to_string(), val);
+                if !updated_fields.contains(&format!("{} (find/replace)", field)) {
+                    updated_fields.push(format!("{} (find/replace)", field));
+                }
+            }
         }
 
         // Nest the V2 `data` object into the update payload

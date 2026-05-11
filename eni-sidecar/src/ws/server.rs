@@ -828,7 +828,13 @@ async fn handle_update_config(
 ) {
     // Store the config value in the SQLite config table
     let value_str = serde_json::to_string(value).unwrap_or_default();
-    let key_owned = key.to_string();
+
+    // Normalize frontend camelCase keys to the snake_case keys used by the
+    // context builder and GET /config handler.
+    let key_owned = match key {
+        "postCardPrompt" => "post_card_prompt".to_string(),
+        other => other.to_string(),
+    };
 
     // Perform the DB operation in a block so the MutexGuard is dropped before any await
     let db_result = {

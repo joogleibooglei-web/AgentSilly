@@ -30,7 +30,7 @@ import {
   setUndoAvailable,
   type RightPaneTab,
 } from '../stores/ui';
-import { setActiveModel, setModelProfiles, setStBaseUrl, updateConfig, type ModelProfile } from '../stores/config';
+import { setActiveModel, setModelProfiles, setPostCardPrompt, setStBaseUrl, updateConfig, type ModelProfile } from '../stores/config';
 
 // --- Protocol Types ---
 
@@ -263,6 +263,11 @@ export class WsClient {
       if (data.st_base_url) {
         setStBaseUrl(data.st_base_url);
       }
+
+      // Hydrate the post-card prompt from persisted config
+      if (data.post_card_prompt) {
+        setPostCardPrompt(data.post_card_prompt);
+      }
     } catch (e) {
       console.warn('[WsClient] Failed to fetch config from sidecar:', e);
     }
@@ -295,9 +300,27 @@ export class WsClient {
         return;
       }
 
-      // Map raw messages to the frontend Message format
+      // Map raw messages to the frontend Message format.
+      // Filter out internal messages that shouldn't be displayed:
+      // - tool/tool_call/tool_result roles (internal agent loop messages)
+      // - post-tool [System: ...] instructions injected as user role
+      // - empty-content assistant messages (tool call placeholders)
       const restoredMessages: Message[] = rawMessages
-        .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
+        .filter((m) => {
+          // Only keep user, assistant, and system roles
+          if (m.role !== 'user' && m.role !== 'assistant' && m.role !== 'system') {
+            return false;
+          }
+          // Filter out empty content messages (tool call assistant placeholders)
+          if (!m.content || m.content.trim() === '') {
+            return false;
+          }
+          // Filter out internal post-tool instructions injected as user messages
+          if (m.content.trimStart().startsWith('[System:')) {
+            return false;
+          }
+          return true;
+        })
         .map((m) => ({
           id: m.id || crypto.randomUUID(),
           role: m.role as Message['role'],

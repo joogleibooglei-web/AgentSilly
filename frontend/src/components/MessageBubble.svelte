@@ -198,7 +198,9 @@
   }
 
   .msg-bubble :global(.code-block code) {
-    white-space: pre;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     display: block;
   }
 
