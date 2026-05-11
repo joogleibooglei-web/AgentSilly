@@ -1,7 +1,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/SillyTavern-Server%20Plugin-blueviolet?style=for-the-badge" alt="SillyTavern Server Plugin" />
-  <img src="https://img.shields.io/badge/plugin-0.5.6-blue?style=for-the-badge" alt="Plugin Version 0.5.6" />
-  <img src="https://img.shields.io/badge/sidecar-0.5.6-orange?style=for-the-badge&logo=rust" alt="Sidecar 0.5.6" />
+  <img src="https://img.shields.io/badge/plugin-0.5.7-blue?style=for-the-badge" alt="Plugin Version 0.5.7" />
+  <img src="https://img.shields.io/badge/sidecar-0.5.7-orange?style=for-the-badge&logo=rust" alt="Sidecar 0.5.7" />
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT License" />
 </p>
 
@@ -163,8 +163,8 @@ The plugin registers routes on the SillyTavern plugin router:
 ```json
 {
   "sidecar_running": true,
-  "sidecar_version": "0.5.6",
-  "plugin_version": "0.5.6"
+  "sidecar_version": "0.5.7",
+  "plugin_version": "0.5.7"
 }
 ```
 

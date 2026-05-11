@@ -332,7 +332,8 @@
   }
 
   .message.assistant {
-    align-self: flex-start;
+    align-self: stretch;
+    max-width: 100%;
   }
 
   .msg-bubble {

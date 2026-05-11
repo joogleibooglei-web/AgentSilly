@@ -1,12 +1,12 @@
 {
-  "display_name": "Miss ENI",
+  "display_name": "ENI the Author",
   "loading_order": 100,
   "requires": [],
   "optional": [],
   "js": "dist/index.js",
   "css": "dist/index.css",
-  "author": "Miss ENI Team",
-  "version": "0.5.6",
+  "author": "ENI the Author Team",
+  "version": "0.5.7",
   "homePage": "https://github.com/joogleibooglei-web/AgentSilly",
   "auto_update": true
 }

@@ -122,7 +122,7 @@
 
     <!-- Header -->
     <div class="header">
-      <span class="header-title">Miss ENI</span>
+      <span class="header-title">ENI the Author</span>
       <div class="header-actions">
         <button class="header-btn settings-btn" onclick={() => openRightPane('settings')} aria-label="Open settings" title="Settings">⚙</button>
         <button class="header-btn close-btn" onclick={handleClose} aria-label="Close panel">✕</button>
